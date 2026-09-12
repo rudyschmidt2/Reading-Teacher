@@ -40,7 +40,12 @@ function shuffle<T>(list: T[]) {
 
 function HonestBanner({ text, party }: { text: string; party?: boolean }) {
   return (
-    <div className={`rounded-3xl px-4 py-3 text-center text-2xl font-black ${party ? "party bg-amber-300 text-stone-900" : "wobble bg-white/20"}`}>
+    <div
+      role="status"
+      className={`fixed left-3 right-3 top-3 z-50 rounded-3xl px-4 py-4 text-center text-3xl font-black shadow-lg ${
+        party ? "party bg-amber-300 text-stone-900" : "wobble bg-sky-100 text-stone-900 ring-4 ring-white"
+      }`}
+    >
       {text}
     </div>
   );
@@ -403,7 +408,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
       house.addStars(child.id, 1);
     } else {
       setShaken(choiceId);
-      setBanner(theme.miss);
+      setBanner(`${theme.miss} Not that one.`);
     }
     window.setTimeout(() => {
       setParty(false);
@@ -519,7 +524,12 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
       setQueue(child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1);
     } else {
       const n = child?.sessionLength === "shorter" ? 5 : child?.sessionLength === "longer" ? 9 : 7;
-      setQueue(base.slice(0, n));
+      const taps = base.filter((it) => it.kind === "tap");
+      const drags = base.filter((it) => it.kind === "drag");
+      const speaks = base.filter((it) => it.kind === "speak");
+      const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id].filter(Boolean));
+      const rest = base.filter((it) => !used.has(it.id));
+      setQueue([taps[0], drags[0], speaks[0], ...rest].filter(Boolean).slice(0, n));
     }
   }, [module, mode, child?.sessionLength, child?.track]);
 
@@ -595,13 +605,13 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
       house.addStars(child.id, 1);
       setWins((w) => w + 1);
     } else {
-      setBanner(theme.miss);
+      setBanner(`${theme.miss} Not that one.`);
     }
     window.setTimeout(() => {
-      setBanner(null);
       setParty(false);
       setShaken(undefined);
       if (ok) {
+        setBanner(null);
         const need = mode === "scout" ? 4 : 5;
         if (wins + 1 >= need && i + 1 >= queue.length - 1) {
           if (mode === "scout") {
