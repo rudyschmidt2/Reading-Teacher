@@ -301,6 +301,8 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [party, setParty] = useState(false);
   const [shaken, setShaken] = useState<string>();
+  const [locked, setLocked] = useState(false);
+  const retries = useRef(0);
   const start = useRef(Date.now());
   const item = plan[i];
 
@@ -378,15 +380,16 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   };
 
   const onPick = (choiceId: string) => {
-    if (!item) return;
+    if (!item || locked) return;
     const ok = choiceId === item.correctId;
+    setLocked(true);
     const row = { id: item.id, rung: item.rung, ok, dim: item.dimension };
     const next = [...results, row];
     house.recordAttempt({
       kidId: child.id,
       moduleId: "placement",
       itemId: item.id,
-      version: 0,
+      version: retries.current,
       kind: "tap",
       dimension: item.dimension,
       correct: ok,
@@ -403,9 +406,16 @@ export function PlacementSession({ kidId }: { kidId: string }) {
       setBanner(theme.miss);
     }
     window.setTimeout(() => {
-      setBanner(null);
       setParty(false);
       setShaken(undefined);
+      if (!ok && retries.current === 0) {
+        retries.current = 1;
+        setLocked(false);
+        return;
+      }
+      setBanner(null);
+      retries.current = 0;
+      setLocked(false);
       if (isMyles) {
         if (i + 1 >= plan.length || (i + 1 >= 6 && next.length >= 6)) finish(next);
         else setI(i + 1);
@@ -421,7 +431,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
         (item.rung === "cvc" && item.id === "C4");
       if (lastOfRung && item.rung === "cvc") finish(next);
       else setI(i + 1);
-    }, ok ? 900 : 650);
+    }, ok ? 1100 : 1600);
   };
 
   if (!item) return null;
@@ -432,10 +442,10 @@ export function PlacementSession({ kidId }: { kidId: string }) {
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
       <p className="display mt-4 text-center text-4xl leading-tight">{lesson.prompt}</p>
       <Replay prompt={lesson.prompt} hint={lesson.parentHint} />
+      {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
       <div className="mx-auto mt-6 max-w-lg">
         <ChoiceGrid choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
       </div>
-      {banner ? <div className="mt-5"><HonestBanner text={banner} party={party} /></div> : null}
     </main>
   );
 }
@@ -626,7 +636,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
       } else {
         setVersion((v) => v + 1);
       }
-    }, ok ? 900 : 650);
+    }, ok ? 1100 : 1600);
   };
 
   return (
@@ -635,6 +645,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
       <p className="mt-2 text-center text-lg opacity-80">{mode === "scout" ? "Secret tunnel" : "Today's adventure"}</p>
       <p className="display mt-3 text-center text-4xl leading-tight">{playItem.prompt}</p>
       <Replay prompt={playItem.prompt} hint={playItem.parentHint} />
+      {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
       <div className="mx-auto mt-6 max-w-lg">
         {playItem.kind === "tap" ? (
           <ChoiceGrid
@@ -655,7 +666,6 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
           />
         ) : null}
       </div>
-      {banner ? <div className="mt-5"><HonestBanner text={banner} party={party} /></div> : null}
     </main>
   );
 }
