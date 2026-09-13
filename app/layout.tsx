@@ -18,13 +18,17 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   title: "Reading Teacher",
   description: "Phonics adventure for Riley, Hudson, Myles, and Cassidy.",
+  applicationName: "Reading Teacher",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Reading Teacher" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#1e1b4b",
+  viewportFit: "cover",
+  themeColor: "#0f0b2e",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
