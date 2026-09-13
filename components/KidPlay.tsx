@@ -5,15 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallHint } from "@/components/Pwa";
 import {
-  isRepeatAsk,
-  pauseRepeatListen,
   phonemeHint,
-  resumeRepeatListen,
   speak,
   stopSpeech,
   unlockKidMic,
+  useHeard,
+  useLessonListen,
   useListening,
-  usePromptRepeat,
 } from "@/lib/audio";
 import {
   SCOUT_MY1,
@@ -42,6 +40,7 @@ import type {
   ThemeId,
   Tile,
   Vowel,
+  Widget,
 } from "@/lib/types";
 import {
   ArrowDownIcon,
@@ -110,13 +109,34 @@ function Dots({ total, current }: { total: number; current: number }) {
   );
 }
 
-function PromptCard({ eyebrow, prompt, hint }: { eyebrow?: string; prompt: string; hint?: string }) {
+function coachLine(kind?: PlayKind, widget?: Widget, listening?: boolean) {
+  if (kind === "speak") return listening ? "I'm listening. Just say it." : "Your turn. Say it out loud.";
+  if (widget === "trace") return "Trace it with your finger.";
+  if (kind === "drag") return listening ? "Park the pieces. Say again if you missed it." : "Park the pieces.";
+  return listening ? "Tap one. Say again if you missed it." : "Tap one.";
+}
+
+function PromptCard({
+  eyebrow,
+  prompt,
+  hint,
+  kind,
+  widget,
+}: {
+  eyebrow?: string;
+  prompt: string;
+  hint?: string;
+  kind?: PlayKind;
+  widget?: Widget;
+}) {
+  const listening = useListening();
   return (
     <section className="glass rise-in mx-auto mt-4 max-w-lg rounded-[28px] px-5 py-5 text-center">
       {eyebrow ? <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/70">{eyebrow}</p> : null}
       <button type="button" onClick={() => speak(prompt)} className="display title-pop mt-1 w-full text-4xl leading-tight">
         {prompt}
       </button>
+      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, listening)}</p>
       <Replay prompt={prompt} hint={hint} />
     </section>
   );
@@ -229,94 +249,30 @@ function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) =>
   );
 }
 
-function SpeakPanel({
-  target,
-  prompt,
-  onResult,
-}: {
-  target: string;
-  prompt: string;
-  onResult: (ok: boolean, spoken: string, needsReview: boolean) => void;
-}) {
-  const [hearing, setHearing] = useState(false);
-  const [heard, setHeard] = useState("");
-
-  const listen = () => {
-    const SR = (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition
-      ?? (window as unknown as { SpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition;
-    if (!SR) {
-      onResult(true, "", true);
-      return;
-    }
-    pauseRepeatListen();
-    const rec = new SR();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 3;
-    setHearing(true);
-    let settled = false;
-    const finishListen = () => {
-      if (settled) return;
-      settled = true;
-      setHearing(false);
-      resumeRepeatListen();
-    };
-    rec.onresult = (e: SpeechRecognitionEvent) => {
-      const text = Array.from(e.results[0] ? [e.results[0][0].transcript] : []).join(" ").toLowerCase();
-      setHeard(text);
-      finishListen();
-      if (isRepeatAsk(text)) {
-        speak(prompt);
-        return;
-      }
-      const goal = target.toLowerCase().replace(/[./]/g, "");
-      const hit = text.replace(/[./]/g, "").includes(goal.replace(/\s+/g, "")) || goal.includes(text.replace(/\s+/g, ""));
-      onResult(hit, text, false);
-    };
-    rec.onerror = () => {
-      finishListen();
-      onResult(false, "", true);
-    };
-    rec.onend = () => finishListen();
-    rec.start();
-  };
-
+function SpeakPanel({ onParent }: { onParent: () => void }) {
+  const listening = useListening();
+  const heard = useHeard();
   return (
     <div className="flex flex-col items-center gap-4">
-      <button
-        type="button"
-        onClick={listen}
-        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${hearing ? "glow-pulse" : ""}`}
+      <div
+        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${listening ? "glow-pulse" : ""}`}
         style={{ ["--orb-a" as string]: "#fb7185", ["--orb-b" as string]: "#e11d48" }}
+        aria-live="polite"
       >
         <MicIcon size={56} />
-        <span className="text-lg font-black">{hearing ? "Listening…" : "Say it"}</span>
-      </button>
+        <span className="text-lg font-black">{listening ? "I'm listening" : "Your turn"}</span>
+      </div>
       {heard ? (
         <p className="glass rounded-full px-4 py-2 text-lg">
           Heard: <span className="font-black">{heard}</span>
         </p>
       ) : null}
-      <button type="button" onClick={() => onResult(false, "parent-listen", true)} className="btn-ghost px-5 py-3 text-lg font-bold">
+      <button type="button" onClick={onParent} className="btn-ghost px-5 py-3 text-lg font-bold">
         Parent will listen
       </button>
     </div>
   );
 }
-
-type SpeechRecognition = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-};
-
-type SpeechRecognitionEvent = {
-  results: { 0?: { 0: { transcript: string } } };
-};
 
 function DragBoard({
   item,
@@ -417,7 +373,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   const router = useRouter();
   const child = kid(kidId);
   const themePrompt = ready && child && child.status !== "waiting" ? "Pick today's game." : undefined;
-  usePromptRepeat(themePrompt);
+  useLessonListen({ prompt: themePrompt, enabled: Boolean(themePrompt) });
 
   useEffect(() => {
     if (themePrompt) speak(themePrompt);
@@ -433,6 +389,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   if (child.status === "waiting") return null;
 
   const choose = (id: ThemeId) => {
+    unlockKidMic();
     pickTheme(kidId, id);
     speak(THEMES.find((t) => t.id === id)?.label ?? "Let's play");
     if (!child.placementGrade) router.push(`/kids/${kidId}/place`);
@@ -489,7 +446,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   const start = useRef(Date.now());
   const history = useRef<PlacementRow[]>([]);
   const item = plan[i];
-  usePromptRepeat(item?.prompt);
+  useLessonListen({ prompt: item?.prompt, enabled: Boolean(item) && !banner });
 
   useEffect(() => {
     if (item) speak(item.prompt);
@@ -581,7 +538,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
       <Dots total={plan.length} current={i} />
-      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} hint={lesson.parentHint} />
+      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} hint={lesson.parentHint} kind="tap" widget={lesson.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
         <ChoiceGrid key={item.id} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
@@ -591,16 +548,12 @@ export function PlacementSession({ kidId }: { kidId: string }) {
 }
 
 function Replay({ prompt, hint }: { prompt: string; hint?: string }) {
-  const listening = useListening();
   return (
-    <div className="mt-4 flex flex-col items-center gap-2">
+    <div className="mt-3 flex justify-center">
       <button type="button" onClick={() => speak(prompt)} className="btn-ghost inline-flex items-center gap-2 px-5 py-2.5 text-lg font-black">
         <SpeakerIcon size={22} />
-        Again
+        Hear it again
       </button>
-      <p className="text-center text-sm font-extrabold uppercase tracking-wide text-white/70">
-        {listening ? "Listening — say what or again" : "Say what or again"}
-      </p>
       {hint ? <p className="sr-only">{phonemeHint(hint)}</p> : null}
     </div>
   );
@@ -693,7 +646,13 @@ export function DailySession({
   const start = useRef(Date.now());
   const usedIds = useRef<Set<string>>(new Set());
   const item = queue[i];
-  usePromptRepeat(item?.prompt);
+  const spokenRef = useRef<(heard: string, hit: boolean) => void>(() => {});
+  useLessonListen({
+    prompt: item?.prompt,
+    target: item?.kind === "speak" ? item.speakTarget ?? item.word ?? item.letter : undefined,
+    onAnswer: (heard, hit) => spokenRef.current(heard, hit),
+    enabled: Boolean(item) && !banner,
+  });
 
   useEffect(() => {
     if (!module) return;
@@ -864,13 +823,15 @@ export function DailySession({
     }, ok ? 1100 : 1600);
   };
 
+  spokenRef.current = (heard, hit) => after(hit, "speak", { text: heard, pending: false });
+
   const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
 
   return (
     <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
       <Dots total={queue.length} current={i} />
-      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} hint={playItem.parentHint} />
+      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} hint={playItem.parentHint} kind={playItem.kind} widget={playItem.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
         {playItem.kind === "tap" && playItem.widget !== "trace" ? (
@@ -888,11 +849,7 @@ export function DailySession({
         {playItem.kind === "drag" ? <DragBoard item={playItem} themeId={theme.id} onDone={(ok) => after(ok, "drag")} /> : null}
         {playItem.widget === "trace" ? <TracePad letter={playItem.letter ?? playItem.correctId ?? "s"} onDone={(ok) => after(ok, "tap")} /> : null}
         {playItem.kind === "speak" ? (
-          <SpeakPanel
-            target={playItem.speakTarget ?? playItem.word ?? playItem.letter ?? ""}
-            prompt={playItem.prompt}
-            onResult={(ok, spoken, needsReview) => after(ok, "speak", { text: spoken, pending: needsReview })}
-          />
+          <SpeakPanel onParent={() => after(false, "speak", { text: "parent-listen", pending: true })} />
         ) : null}
       </div>
     </main>

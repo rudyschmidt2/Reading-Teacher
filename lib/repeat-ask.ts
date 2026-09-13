@@ -54,3 +54,12 @@ export function isRepeatAsk(raw: string) {
   }
   return false;
 }
+
+const FILLER = new Set(["um", "uh", "hmm", "ah", "oh", "mm", "er", "erm"]);
+
+/** Kid said something that should count as a try, not just noise. */
+export function looksLikeAttempt(raw: string) {
+  const t = normalizeHeard(raw);
+  if (!t || FILLER.has(t)) return false;
+  return t.length >= 1;
+}

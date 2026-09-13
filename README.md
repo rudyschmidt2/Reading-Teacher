@@ -50,9 +50,15 @@ If the key is missing, kids still see the big written prompt. The parent desk sh
 
 Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
 
-### Say “what” / “again”
+### How a turn works
 
-After a prompt, the app listens. If a child says **what**, **huh**, **repeat**, **again**, or “say it again”, the same prompt plays again. They can also tap the big words or **Again**. This needs the tablet microphone (Safari / Chrome).
+The teacher speaks the prompt, then the app listens. Kids do not tap a mic on/off.
+
+- Tap / drag / trace: do the move. Say **what** or **again** if they missed the words.
+- Speak items: just say it. The orb says “I'm listening.” Wrong word is an honest miss; silence is not.
+- **Hear it again** and the big prompt stay as backups.
+
+This needs the tablet microphone (Safari / Chrome). Install as an app so the mic stays allowed.
 
 ### Install as an app (PWA)
 

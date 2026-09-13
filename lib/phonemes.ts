@@ -103,6 +103,35 @@ export function prepareSpokenText(text: string, kind: SpeakKind = "prompt"): str
   return expandPrompt(raw);
 }
 
+function heardNorm(raw: string) {
+  return raw
+    .toLowerCase()
+    .replace(/[?!.,']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compact(s: string) {
+  return s.replace(/[\s,/]/g, "");
+}
+
+/** Heard speech matches a speak-item target (word, letter, or /phoneme/). */
+export function isSpokenHit(heard: string, target: string) {
+  const words = heardNorm(heard).split(" ").filter(Boolean);
+  const h = compact(heardNorm(heard));
+  if (!h) return false;
+  const inner = target.trim().replace(/^\/+|\/+$/g, "");
+  const raw = compact(heardNorm(inner));
+  const sound = compact(heardNorm(expandPhonemeToken(target)));
+  const name = compact(heardNorm(letterName(inner)));
+  const names = new Set([raw, sound, name].filter(Boolean));
+  if (words.some((w) => names.has(compact(w)))) return true;
+  if (raw.length === 1 && /^([a-zăĕĭŏŭ])\1+$/i.test(h) && h[0]?.toLowerCase() === raw) return true;
+  if (raw.length >= 3 && words.some((w) => compact(w).includes(raw))) return true;
+  if (sound.length >= 3 && (h === sound || words.some((w) => compact(w) === sound))) return true;
+  return false;
+}
+
 export function parseSpeakKind(value: string | null | undefined): SpeakKind {
   if (value === "phoneme" || value === "letter") return value;
   return "prompt";
