@@ -8,8 +8,12 @@ Kids pick a face, smash today’s theme, take placement, then play tap / drag / 
 
 ```bash
 npm install
+cp .env.example .env.local
+# put OPENAI_API_KEY in .env.local
 npm run dev
 ```
+
+Kid voiceover uses OpenAI `gpt-4o-mini-tts` (voice `coral`) via `/api/voice`. Primary env: `OPENAI_API_KEY`. Optional: `AI_GATEWAY_API_KEY`, `READING_TEACHER_VOICE`, `READING_TEACHER_TTS_MODEL`. On Vercel, add `OPENAI_API_KEY` under Project → Settings → Environment Variables, then redeploy. If the key is missing, kids still see the big written prompt.
 
 ## Kids
 

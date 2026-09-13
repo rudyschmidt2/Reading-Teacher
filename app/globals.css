@@ -417,6 +417,49 @@
     padding: 0.5rem 0.6rem 0.5rem 0.5rem;
   }
 
+  .play-dock {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 40;
+    padding: 0.7rem 0.7rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgb(8 6 24 / 0.82), rgb(8 6 24 / 0.35) 70%, transparent);
+  }
+
+  .play-dock__bar {
+    display: flex;
+    align-items: stretch;
+    gap: 0.65rem;
+    margin: 0 auto;
+    max-width: 32rem;
+  }
+
+  .play-dock__again,
+  .play-dock__enough {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 5.5rem;
+    border-radius: 1.6rem;
+    color: white;
+    font-weight: 900;
+    user-select: none;
+  }
+
+  .play-dock__again {
+    flex: 0 0 7.5rem;
+    flex-direction: column;
+    background: rgb(255 255 255 / 0.14);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+
+  .play-dock__enough {
+    flex: 1;
+    padding: 0.7rem 0.85rem;
+    background: rgb(27 20 64 / 0.78);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+
   .star-pill {
     display: inline-flex;
     align-items: center;
