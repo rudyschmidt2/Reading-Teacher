@@ -406,7 +406,9 @@ export function PlacementSession({ kidId }: { kidId: string }) {
       retries.current = 0;
       setLocked(false);
       if (isMyles) {
-        if (i + 1 >= plan.length || (i + 1 >= 6 && next.length >= 6)) finish(next);
+        const hits = next.filter((r) => r.ok).length;
+        const fussy = next.length >= 6 && (hits < 4 || struggleStop(next, item.rung));
+        if (i + 1 >= plan.length || fussy) finish(next);
         else setI(i + 1);
         return;
       }
