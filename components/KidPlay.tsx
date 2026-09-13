@@ -12,6 +12,7 @@ import {
   useHeard,
   useLessonListen,
   useListening,
+  useMicBlocked,
 } from "@/lib/audio";
 import {
   SCOUT_MY1,
@@ -109,7 +110,8 @@ function Dots({ total, current }: { total: number; current: number }) {
   );
 }
 
-function coachLine(kind?: PlayKind, widget?: Widget, listening?: boolean) {
+function coachLine(kind?: PlayKind, widget?: Widget, listening?: boolean, blocked?: boolean) {
+  if (blocked) return "Allow the microphone, then just talk.";
   if (kind === "speak") return listening ? "I'm listening. Just say it." : "Your turn. Say it out loud.";
   if (widget === "trace") return "Trace it with your finger.";
   if (kind === "drag") return listening ? "Park the pieces. Say again if you missed it." : "Park the pieces.";
@@ -130,13 +132,14 @@ function PromptCard({
   widget?: Widget;
 }) {
   const listening = useListening();
+  const blocked = useMicBlocked();
   return (
     <section className="glass rise-in mx-auto mt-4 max-w-lg rounded-[28px] px-5 py-5 text-center">
       {eyebrow ? <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/70">{eyebrow}</p> : null}
       <button type="button" onClick={() => speak(prompt)} className="display title-pop mt-1 w-full text-4xl leading-tight">
         {prompt}
       </button>
-      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, listening)}</p>
+      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, listening, blocked)}</p>
       <Replay prompt={prompt} hint={hint} />
     </section>
   );

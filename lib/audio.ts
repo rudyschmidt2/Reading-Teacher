@@ -18,4 +18,5 @@ export {
   useHeard,
   useLessonListen,
   useListening,
+  useMicBlocked,
 } from "./listen";

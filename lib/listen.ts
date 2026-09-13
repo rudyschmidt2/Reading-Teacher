@@ -29,6 +29,7 @@ type Turn = {
 
 const listenFns = new Set<(on: boolean) => void>();
 const heardFns = new Set<(text: string) => void>();
+const blockFns = new Set<(on: boolean) => void>();
 let rec: Rec | null = null;
 let turn: Turn | null = null;
 let wanted = false;
@@ -36,6 +37,7 @@ let halt = false;
 let armed = false;
 let restartTimer = 0;
 let lastHeard = "";
+let blocked = false;
 
 function Ctor() {
   const w = window as unknown as {
@@ -56,6 +58,11 @@ function setListening(on: boolean) {
 function setHeard(text: string) {
   lastHeard = text;
   heardFns.forEach((fn) => fn(text));
+}
+
+function setBlocked(on: boolean) {
+  blocked = on;
+  blockFns.forEach((fn) => fn(on));
 }
 
 function stopRec() {
@@ -114,6 +121,7 @@ function startRec() {
   next.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       wanted = false;
+      setBlocked(true);
       setListening(false);
       return;
     }
@@ -155,6 +163,7 @@ export function unlockKidMic() {
     return;
   }
   armed = true;
+  setBlocked(false);
   const probe = new Make();
   probe.onerror = () => {};
   probe.onend = () => {};
@@ -210,6 +219,17 @@ export function useListening() {
     listenFns.add(setOn);
     return () => {
       listenFns.delete(setOn);
+    };
+  }, []);
+  return on;
+}
+
+export function useMicBlocked() {
+  const [on, setOn] = useState(blocked);
+  useEffect(() => {
+    blockFns.add(setOn);
+    return () => {
+      blockFns.delete(setOn);
     };
   }, []);
   return on;
