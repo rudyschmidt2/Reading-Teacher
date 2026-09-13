@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { phonemeHint, speak } from "@/lib/audio";
+import { InstallHint } from "@/components/Pwa";
+import {
+  isRepeatAsk,
+  pauseRepeatListen,
+  phonemeHint,
+  resumeRepeatListen,
+  speak,
+  stopSpeech,
+  unlockKidMic,
+  useListening,
+  usePromptRepeat,
+} from "@/lib/audio";
 import {
   SCOUT_MY1,
   SCOUT_RH1,
@@ -30,6 +41,19 @@ import type {
   Tile,
   Vowel,
 } from "@/lib/types";
+import {
+  ArrowDownIcon,
+  ArrowRightIcon,
+  BoltIcon,
+  CheckIcon,
+  HandIcon,
+  LockIcon,
+  MicIcon,
+  SparklesIcon,
+  SpeakerIcon,
+  StarIcon,
+  TelescopeIcon,
+} from "@/components/Icons";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -39,23 +63,70 @@ function shuffle<T>(list: T[]) {
   return [...list].sort(() => Math.random() - 0.5);
 }
 
+const CONFETTI_COLORS = ["#fde047", "#f472b6", "#22d3ee", "#a3e635", "#fb923c", "#c084fc", "#ffffff"];
+
+function Confetti({ count = 18 }: { count?: number }) {
+  return (
+    <span className="confetti" aria-hidden>
+      {Array.from({ length: count }, (_, k) => {
+        const angle = (k / count) * Math.PI * 2;
+        const dist = 90 + (k % 3) * 40;
+        const style = {
+          "--x": `${Math.cos(angle) * dist}px`,
+          "--y": `${Math.sin(angle) * dist - 30}px`,
+          "--c": CONFETTI_COLORS[k % CONFETTI_COLORS.length],
+          "--d": `${(k % 4) * 40}ms`,
+        } as CSSProperties;
+        return <span key={k} style={style} />;
+      })}
+    </span>
+  );
+}
+
 function HonestBanner({ text, party }: { text: string; party?: boolean }) {
   return (
-    <div
-      role="status"
-      className={`fixed left-3 right-3 top-3 z-50 rounded-3xl px-4 py-4 text-center text-3xl font-black shadow-lg ${
-        party ? "party bg-amber-300 text-stone-900" : "wobble bg-sky-100 text-stone-900 ring-4 ring-white"
-      }`}
-    >
-      {text}
+    <div role="status" className="fixed left-3 right-3 top-3 z-50 mx-auto max-w-lg">
+      <div className={`banner relative text-3xl ${party ? "party banner--win" : "wobble banner--miss"}`}>
+        {party ? <Confetti /> : null}
+        <span className="relative inline-flex items-center justify-center gap-3">
+          {party ? <SparklesIcon size={28} className="shrink-0" /> : null}
+          {text}
+        </span>
+      </div>
     </div>
+  );
+}
+
+function Dots({ total, current }: { total: number; current: number }) {
+  if (total <= 1) return null;
+  return (
+    <div className="dots mt-3" aria-label={`Step ${Math.min(current + 1, total)} of ${total}`}>
+      {Array.from({ length: total }, (_, k) => (
+        <span key={k} className={`dot ${k < current ? "dot--done" : k === current ? "dot--now" : ""}`} />
+      ))}
+    </div>
+  );
+}
+
+function PromptCard({ eyebrow, prompt, hint }: { eyebrow?: string; prompt: string; hint?: string }) {
+  return (
+    <section className="glass rise-in mx-auto mt-4 max-w-lg rounded-[28px] px-5 py-5 text-center">
+      {eyebrow ? <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/70">{eyebrow}</p> : null}
+      <button type="button" onClick={() => speak(prompt)} className="display title-pop mt-1 w-full text-4xl leading-tight">
+        {prompt}
+      </button>
+      <Replay prompt={prompt} hint={hint} />
+    </section>
   );
 }
 
 function VowelFace({ vowel }: { vowel: Vowel }) {
   const face = VOWEL_FACE[vowel];
   return (
-    <span className={`inline-flex h-16 min-w-16 items-center justify-center rounded-2xl text-3xl font-black vowel-${vowel}`} title={`${face.name} ${face.sound}`}>
+    <span
+      className={`inline-flex h-16 min-w-16 items-center justify-center rounded-2xl text-3xl font-black shadow-[0_4px_0_rgb(0_0_0/0.25)] vowel-${vowel}`}
+      title={`${face.name} ${face.sound}`}
+    >
       {vowel}
       <sup className="ml-1 text-lg">{face.mark}</sup>
     </span>
@@ -71,17 +142,19 @@ function TileChip({
 }) {
   if (tile.kind === "vowel" && tile.vowel) {
     return (
-      <button type="button" onClick={onPick} className="fat-card flex min-h-28 min-w-28 flex-col items-center justify-center p-3">
+      <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-28 min-w-28 flex-col items-center justify-center p-3">
         <VowelFace vowel={tile.vowel} />
         {tile.label.length > 1 ? <span className="text-3xl font-black">{tile.label.slice(1)}</span> : null}
-        <span className="mt-1 text-sm font-bold opacity-70">{tile.label.length > 1 ? tile.label : VOWEL_FACE[tile.vowel].sound}</span>
+        <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">
+          {tile.label.length > 1 ? tile.label : VOWEL_FACE[tile.vowel].sound}
+        </span>
       </button>
     );
   }
   return (
-    <button type="button" onClick={onPick} className="fat-card flex min-h-28 min-w-28 flex-col items-center justify-center p-3 text-4xl font-black">
-      {tile.kind === "sound" ? tile.label : tile.label}
-      {tile.kind === "sound" ? <span className="mt-1 text-sm">sound</span> : null}
+    <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-28 min-w-28 flex-col items-center justify-center p-3 text-4xl font-black">
+      {tile.label}
+      {tile.kind === "sound" ? <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">sound</span> : null}
     </button>
   );
 }
@@ -96,16 +169,18 @@ function ChoiceGrid({
   shaken?: string;
 }) {
   return (
-    <div className={`grid gap-3 ${choices.length > 3 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
-      {choices.map((c) => (
+    <div className={`grid gap-4 ${choices.length > 3 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
+      {choices.map((c, k) => (
         <button
           key={c.id}
           type="button"
           onClick={() => onPick(c.id)}
-          className={`fat-card flex flex-col items-center justify-center gap-1 p-4 text-4xl font-black ${shaken === c.id ? "wobble" : "bounce-in"}`}
+          className={`fat-card flex min-h-36 flex-col items-center justify-center gap-2 p-4 text-4xl font-black ${
+            shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 7)}`
+          }`}
         >
-          <span className="text-5xl">{c.emoji ?? ""}</span>
-          {c.label}
+          {c.emoji ? <span className="emoji-3d text-6xl">{c.emoji}</span> : null}
+          <span className={c.emoji ? "text-2xl" : ""}>{c.label}</span>
         </button>
       ))}
     </div>
@@ -114,24 +189,38 @@ function ChoiceGrid({
 
 function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) => void }) {
   const [marks, setMarks] = useState(0);
+  const traced = marks > 3;
   return (
-    <div className="space-y-3">
-      <p className="text-center text-6xl font-black">{letter}</p>
+    <div className="space-y-4">
       <button
         type="button"
-        className="fat-card mx-auto flex h-48 w-full max-w-sm items-center justify-center text-2xl"
+        className="glass-strong relative mx-auto flex h-60 w-full max-w-sm select-none flex-col items-center justify-center overflow-hidden rounded-[32px] text-white"
         onPointerMove={(e) => {
           if (e.buttons) setMarks((n) => n + 1);
         }}
         onClick={() => setMarks((n) => n + 4)}
       >
-        Trace {letter} with your finger
+        <span
+          className="display pointer-events-none text-[9rem] leading-none text-transparent transition-all"
+          style={{
+            WebkitTextStroke: traced ? "0px" : "3px rgb(255 255 255 / 0.9)",
+            color: traced ? "white" : "transparent",
+            textShadow: traced ? "0 0 30px var(--glow)" : "none",
+          }}
+        >
+          {letter}
+        </span>
+        <span className="absolute bottom-4 inline-flex items-center gap-2 rounded-full bg-black/25 px-3 py-1.5 text-sm font-extrabold">
+          <HandIcon size={16} />
+          {traced ? "Nice tracing!" : `Trace ${letter} with your finger`}
+        </span>
       </button>
       <button
         type="button"
-        className="mx-auto block rounded-full bg-white px-6 py-3 text-xl font-black text-stone-900"
+        className="btn-glow mx-auto flex items-center gap-2 px-7 py-3.5 text-xl font-black"
         onClick={() => onDone(marks > 3)}
       >
+        <CheckIcon size={22} />
         I traced it
       </button>
     </div>
@@ -140,9 +229,11 @@ function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) =>
 
 function SpeakPanel({
   target,
+  prompt,
   onResult,
 }: {
   target: string;
+  prompt: string;
   onResult: (ok: boolean, spoken: string, needsReview: boolean) => void;
 }) {
   const [hearing, setHearing] = useState(false);
@@ -155,38 +246,56 @@ function SpeakPanel({
       onResult(true, "", true);
       return;
     }
+    pauseRepeatListen();
     const rec = new SR();
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 3;
     setHearing(true);
+    let settled = false;
+    const finishListen = () => {
+      if (settled) return;
+      settled = true;
+      setHearing(false);
+      resumeRepeatListen();
+    };
     rec.onresult = (e: SpeechRecognitionEvent) => {
       const text = Array.from(e.results[0] ? [e.results[0][0].transcript] : []).join(" ").toLowerCase();
       setHeard(text);
-      setHearing(false);
+      finishListen();
+      if (isRepeatAsk(text)) {
+        speak(prompt);
+        return;
+      }
       const goal = target.toLowerCase().replace(/[./]/g, "");
       const hit = text.replace(/[./]/g, "").includes(goal.replace(/\s+/g, "")) || goal.includes(text.replace(/\s+/g, ""));
       onResult(hit, text, false);
     };
     rec.onerror = () => {
-      setHearing(false);
+      finishListen();
       onResult(false, "", true);
     };
+    rec.onend = () => finishListen();
     rec.start();
   };
 
   return (
-    <div className="space-y-3">
-      <button type="button" onClick={listen} className="fat-card mx-auto flex h-36 w-36 flex-col items-center justify-center bg-rose-200 text-5xl">
-        🎤
-        <span className="text-lg">{hearing ? "Listening…" : "Say it"}</span>
-      </button>
-      {heard ? <p className="text-center text-lg">Heard: {heard}</p> : null}
+    <div className="flex flex-col items-center gap-4">
       <button
         type="button"
-        onClick={() => onResult(false, "parent-listen", true)}
-        className="mx-auto block rounded-full bg-white/20 px-4 py-3 text-lg font-bold"
+        onClick={listen}
+        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${hearing ? "glow-pulse" : ""}`}
+        style={{ ["--orb-a" as string]: "#fb7185", ["--orb-b" as string]: "#e11d48" }}
       >
+        <MicIcon size={56} />
+        <span className="text-lg font-black">{hearing ? "Listening…" : "Say it"}</span>
+      </button>
+      {heard ? (
+        <p className="glass rounded-full px-4 py-2 text-lg">
+          Heard: <span className="font-black">{heard}</span>
+        </p>
+      ) : null}
+      <button type="button" onClick={() => onResult(false, "parent-listen", true)} className="btn-ghost px-5 py-3 text-lg font-bold">
         Parent will listen
       </button>
     </div>
@@ -199,6 +308,7 @@ type SpeechRecognition = {
   maxAlternatives: number;
   onresult: ((e: SpeechRecognitionEvent) => void) | null;
   onerror: (() => void) | null;
+  onend: (() => void) | null;
   start: () => void;
 };
 
@@ -238,19 +348,26 @@ function DragBoard({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className={`flex justify-center gap-3 ${shake ? "wobble" : ""}`}>
         {slots.map((slot, i) => {
           const tile = filled[slot.id];
+          const state = tile ? "slot--filled" : i === focus ? "slot--focus" : "";
           return (
             <button
               key={slot.id}
               type="button"
               onClick={() => setFocus(i)}
-              className="flex h-28 w-28 items-center justify-center rounded-[28px] border-4 border-dashed border-white/70 bg-white/15 text-4xl font-black"
-              style={slot.glowVowel ? { boxShadow: `inset 0 0 0 6px ${VOWEL_FACE[slot.glowVowel].color}` } : undefined}
+              className={`slot flex h-28 w-28 items-center justify-center text-4xl font-black ${state}`}
+              style={slot.glowVowel ? { boxShadow: `inset 0 0 0 5px ${VOWEL_FACE[slot.glowVowel].color}` } : undefined}
             >
-              {tile ? tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label : i === focus ? "↓" : ""}
+              {tile ? (
+                tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label
+              ) : i === focus ? (
+                <ArrowDownIcon size={36} className="animate-bounce text-white/90" />
+              ) : (
+                ""
+              )}
             </button>
           );
         })}
@@ -260,9 +377,7 @@ function DragBoard({
           <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
         ))}
       </div>
-      <p className="text-center text-sm opacity-80">
-        {trayHint(themeId, slots.length)}
-      </p>
+      <p className="mx-auto max-w-sm text-center text-sm font-bold text-white/70">{trayHint(themeId, slots.length)}</p>
     </div>
   );
 }
@@ -280,21 +395,39 @@ function asLesson(item: PlacementItem): LessonItem {
   };
 }
 
+function StageHeading({ eyebrow, title, sub }: { eyebrow?: string; title: string; sub?: string }) {
+  return (
+    <header className="rise-in text-center">
+      {eyebrow ? (
+        <span className="glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.18em] text-white/85">
+          <SparklesIcon size={14} className="text-amber-300" />
+          {eyebrow}
+        </span>
+      ) : null}
+      <h1 className="display title-pop mt-3 text-5xl font-bold leading-none">{title}</h1>
+      {sub ? <p className="mt-3 text-lg font-bold text-white/80">{sub}</p> : null}
+    </header>
+  );
+}
+
 export function ThemePicker({ kidId }: { kidId: string }) {
   const { kid, pickTheme, ready } = useHouse();
   const router = useRouter();
   const child = kid(kidId);
+  const themePrompt = ready && child && child.status !== "waiting" ? "Pick today's game." : undefined;
+  usePromptRepeat(themePrompt);
 
   useEffect(() => {
-    if (ready && child && child.status !== "waiting") speak("Pick today's game.");
-  }, [ready, child]);
+    if (themePrompt) speak(themePrompt);
+    return () => stopSpeech();
+  }, [themePrompt]);
 
   useEffect(() => {
     if (ready && child?.status === "waiting") router.replace(`/kids/${kidId}/waiting`);
   }, [ready, child, kidId, router]);
 
-  if (!ready) return <p className="p-8">Loading…</p>;
-  if (!child) return <p className="p-8">Missing kid.</p>;
+  if (!ready) return <Loading />;
+  if (!child) return <Loading text="Missing kid." />;
   if (child.status === "waiting") return null;
 
   const choose = (id: ThemeId) => {
@@ -305,18 +438,26 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   };
 
   return (
-    <main className="kid-stage theme-planets-space px-4 py-6">
-      <p className="display text-center text-5xl font-bold">Today&apos;s skin</p>
-      <p className="mt-2 text-center text-xl">Smash one. You can pick a different one tomorrow.</p>
-      <div className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3">
-        {THEMES.map((t) => (
-          <button key={t.id} type="button" onClick={() => choose(t.id)} className={`fat-card flex items-center gap-4 p-5 text-left theme-${t.id}`}>
-            <span className="text-5xl">{t.emoji}</span>
-            <span>
-              <span className="display block text-3xl">{t.label}</span>
-              <span className="block text-lg font-bold opacity-80">{t.host}</span>
-              <span className="text-base opacity-70">{t.flavor}</span>
+    <main className="kid-stage theme-planets-space px-4 py-8" onPointerDown={unlockKidMic}>
+      <StageHeading eyebrow={`${child.name}'s pick`} title="Today's skin" sub="Smash one. You can pick a different one tomorrow." />
+      <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4 md:max-w-3xl md:grid-cols-2">
+        {THEMES.map((t, k) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => choose(t.id)}
+            className={`fat-card rise-in stagger-${Math.min(k + 1, 7)} group relative flex items-center gap-4 overflow-hidden p-5 text-left theme-${t.id}`}
+          >
+            <span className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full opacity-40 blur-2xl" style={{ background: "var(--accent)" }} />
+            <span className="orb h-20 w-20 shrink-0 text-5xl">
+              <span className="emoji-3d">{t.emoji}</span>
             </span>
+            <span className="relative min-w-0 flex-1">
+              <span className="display block text-2xl leading-none sm:text-3xl">{t.label}</span>
+              <span className="mt-1.5 block truncate text-sm font-extrabold uppercase tracking-wide opacity-60">{t.host}</span>
+              <span className="mt-1 block text-sm font-semibold leading-snug opacity-75">{t.flavor}</span>
+            </span>
+            <ArrowRightIcon size={26} className="shrink-0 opacity-40 transition-all group-hover:translate-x-1 group-hover:opacity-80" />
           </button>
         ))}
       </div>
@@ -346,13 +487,15 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   const start = useRef(Date.now());
   const history = useRef<PlacementRow[]>([]);
   const item = plan[i];
+  usePromptRepeat(item?.prompt);
 
   useEffect(() => {
     if (item) speak(item.prompt);
     start.current = Date.now();
+    return () => stopSpeech();
   }, [item]);
 
-  if (!house.ready || !child) return <p className="p-8">Loading…</p>;
+  if (!house.ready || !child) return <Loading />;
   if (child.status === "waiting") return null;
   if (!child.themeToday || child.themeDate !== today()) {
     router.replace(`/kids/${kidId}/theme`);
@@ -433,24 +576,29 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(item, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
-      <p className="display mt-4 text-center text-4xl leading-tight">{lesson.prompt}</p>
-      <Replay prompt={lesson.prompt} hint={lesson.parentHint} />
-      {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
+      <Dots total={plan.length} current={i} />
+      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} hint={lesson.parentHint} />
+      {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
-        <ChoiceGrid choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
+        <ChoiceGrid key={item.id} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
       </div>
     </main>
   );
 }
 
 function Replay({ prompt, hint }: { prompt: string; hint?: string }) {
+  const listening = useListening();
   return (
-    <div className="mt-3 flex justify-center gap-3">
-      <button type="button" onClick={() => speak(prompt)} className="rounded-full bg-white/20 px-5 py-3 text-xl font-black">
-        🔊 Again
+    <div className="mt-4 flex flex-col items-center gap-2">
+      <button type="button" onClick={() => speak(prompt)} className="btn-ghost inline-flex items-center gap-2 px-5 py-2.5 text-lg font-black">
+        <SpeakerIcon size={22} />
+        Again
       </button>
+      <p className="text-center text-sm font-extrabold uppercase tracking-wide text-white/70">
+        {listening ? "Listening — say what or again" : "Say what or again"}
+      </p>
       {hint ? <p className="sr-only">{phonemeHint(hint)}</p> : null}
     </div>
   );
@@ -473,27 +621,33 @@ function KidChrome({
 }) {
   const t = themeOf(themeId);
   const hold = useRef<number | null>(null);
+  const clear = () => {
+    if (hold.current) window.clearTimeout(hold.current);
+  };
   return (
-    <div className="flex items-center justify-between">
+    <div className="hud glass mx-auto max-w-lg">
       <button
         type="button"
-        className="host-float text-5xl"
+        className="orb host-float h-14 w-14 shrink-0 text-3xl"
         aria-label={sitting ?? t.host}
         onPointerDown={() => {
           if (!onEnough) return;
           hold.current = window.setTimeout(onEnough, 1600);
         }}
-        onPointerUp={() => {
-          if (hold.current) window.clearTimeout(hold.current);
-        }}
+        onPointerUp={clear}
+        onPointerLeave={clear}
+        onPointerCancel={clear}
       >
-        {hostEmoji ?? t.hostEmoji}
+        <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
       </button>
-      <p className="display text-center text-2xl leading-tight">
+      <p className="display min-w-0 flex-1 text-center text-2xl leading-none">
         {kidName}
-        <span className="mt-1 block text-sm font-bold opacity-80">{sitting ?? t.host}</span>
+        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">{sitting ?? t.host}</span>
       </p>
-      <p className="rounded-full bg-white/20 px-4 py-2 text-xl font-black">⭐ {stars}</p>
+      <span className="star-pill text-xl">
+        <StarIcon size={20} className="text-amber-700 drop-shadow" />
+        {stars}
+      </span>
     </div>
   );
 }
@@ -524,6 +678,7 @@ export function DailySession({
   const [wins, setWins] = useState(0);
   const start = useRef(Date.now());
   const item = queue[i];
+  usePromptRepeat(item?.prompt);
 
   useEffect(() => {
     if (!module) return;
@@ -546,9 +701,10 @@ export function DailySession({
   useEffect(() => {
     if (item) speak(item.prompt);
     start.current = Date.now();
+    return () => stopSpeech();
   }, [item]);
 
-  if (!house.ready || !child) return <p className="p-8">Loading…</p>;
+  if (!house.ready || !child) return <Loading />;
   if (child.status === "waiting") {
     router.replace(`/kids/${kidId}/waiting`);
     return null;
@@ -563,9 +719,15 @@ export function DailySession({
   }
   if (!module || !item) {
     return (
-      <main className={`kid-stage theme-${theme.id} p-6`}>
-        <p className="display text-4xl">No module on the path yet.</p>
-        <Link href="/parent" className="mt-4 inline-block rounded-full bg-white px-4 py-2 text-stone-900">Parent path</Link>
+      <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center p-6 text-center`}>
+        <span className="orb h-24 w-24 text-white">
+          <TelescopeIcon size={44} />
+        </span>
+        <p className="display title-pop mt-6 text-4xl">No module on the path yet.</p>
+        <Link href="/parent" className="btn-solid mt-6 inline-flex items-center gap-2 px-6 py-3 text-lg font-black">
+          Parent path
+          <ArrowRightIcon size={20} />
+        </Link>
       </main>
     );
   }
@@ -666,16 +828,18 @@ export function DailySession({
     }, ok ? 1100 : 1600);
   };
 
+  const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
+
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
-      <p className="mt-2 text-center text-lg opacity-80">{mode === "scout" ? "Secret tunnel" : "Today's adventure"}</p>
-      <p className="display mt-3 text-center text-4xl leading-tight">{playItem.prompt}</p>
-      <Replay prompt={playItem.prompt} hint={playItem.parentHint} />
-      {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
+      <Dots total={queue.length} current={i} />
+      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} hint={playItem.parentHint} />
+      {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
         {playItem.kind === "tap" && playItem.widget !== "trace" ? (
           <ChoiceGrid
+            key={`${playItem.id}-${version}`}
             choices={playItem.choices ?? []}
             shaken={shaken}
             onPick={(id) => {
@@ -690,6 +854,7 @@ export function DailySession({
         {playItem.kind === "speak" ? (
           <SpeakPanel
             target={playItem.speakTarget ?? playItem.word ?? playItem.letter ?? ""}
+            prompt={playItem.prompt}
             onResult={(ok, spoken, needsReview) => after(ok, "speak", { text: spoken, pending: needsReview })}
           />
         ) : null}
@@ -698,30 +863,71 @@ export function DailySession({
   );
 }
 
+const KID_GRADIENTS: [string, string][] = [
+  ["#f59e0b", "#ec4899"],
+  ["#22d3ee", "#6366f1"],
+  ["#a3e635", "#059669"],
+  ["#c084fc", "#7c3aed"],
+  ["#fb7185", "#f97316"],
+];
+
 export function KidPicker() {
   const { state, ready } = useHouse();
-  if (!ready) return <p className="p-8 text-white">Loading…</p>;
+  if (!ready) return <Loading />;
   return (
-    <main className="kid-stage theme-planets-space px-4 py-6">
-      <p className="display text-center text-5xl">Who&apos;s reading?</p>
-      <p className="mt-2 text-center text-xl">Tap a face. Stars, not grades.</p>
-      <div className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3">
-        {state.kids.map((k) => (
-          <Link
-            key={k.id}
-            href={k.status === "waiting" ? `/kids/${k.id}/waiting` : `/kids/${k.id}/theme`}
-            className="fat-card flex items-center justify-between p-5"
-          >
-            <span>
-              <span className="display block text-4xl">{k.name}</span>
-              <span className="text-lg opacity-70">
-                {k.status === "waiting" ? "Coming later" : k.track === "letters" ? "Letters and sounds" : "Word adventure"}
+    <main className="kid-stage theme-planets-space px-4 py-8">
+      <StageHeading eyebrow="Player select" title="Who's reading?" sub="Tap a face. Stars, not grades." />
+      <InstallHint />
+      <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4">
+        {state.kids.map((k, idx) => {
+          const waiting = k.status === "waiting";
+          const [a, b] = KID_GRADIENTS[idx % KID_GRADIENTS.length];
+          return (
+            <Link
+              key={k.id}
+              href={waiting ? `/kids/${k.id}/waiting` : `/kids/${k.id}/theme`}
+              className={`fat-card rise-in stagger-${Math.min(idx + 1, 7)} group flex items-center gap-4 p-5 ${waiting ? "saturate-50" : ""}`}
+              style={waiting ? ({ "--card": "#ece9f4" } as CSSProperties) : undefined}
+            >
+              <span
+                className="orb orb-ring display h-20 w-20 shrink-0 text-5xl text-white"
+                style={{ ["--orb-a" as string]: waiting ? "#94a3b8" : a, ["--orb-b" as string]: waiting ? "#475569" : b }}
+              >
+                {waiting ? <LockIcon size={36} /> : k.name.slice(0, 1)}
               </span>
-            </span>
-            <span className="text-3xl">{k.status === "waiting" ? "🔒" : `⭐ ${k.stars}`}</span>
-          </Link>
-        ))}
+              <span className="min-w-0 flex-1">
+                <span className="display block text-4xl leading-none">{k.name}</span>
+                <span className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-extrabold uppercase tracking-wide opacity-60">
+                  {waiting ? null : <BoltIcon size={14} />}
+                  {waiting ? "Coming later" : k.track === "letters" ? "Letters and sounds" : "Word adventure"}
+                </span>
+              </span>
+              {waiting ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-900/80 px-3 py-1.5 text-sm font-extrabold text-white">
+                  <LockIcon size={14} />
+                  Soon
+                </span>
+              ) : (
+                <span className="star-pill text-lg">
+                  <StarIcon size={18} className="text-amber-700" />
+                  {k.stars}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
+    </main>
+  );
+}
+
+export function Loading({ text = "Loading…" }: { text?: string }) {
+  return (
+    <main className="kid-stage theme-planets-space flex min-h-dvh items-center justify-center p-8">
+      <p className="glass inline-flex items-center gap-3 rounded-full px-5 py-3 text-lg font-black text-white">
+        <span className="h-3 w-3 animate-pulse rounded-full bg-amber-300" />
+        {text}
+      </p>
     </main>
   );
 }
