@@ -1,4 +1,9 @@
-import { nextSameSkill } from "../lib/skip-stuck.ts";
+function nextSameSkill(moduleItems, current, usedIds) {
+  const unused = moduleItems.filter((it) => it.id !== current.id && !usedIds.has(it.id));
+  const sameKind = unused.find((it) => it.dimension === current.dimension && it.kind === current.kind);
+  if (sameKind) return sameKind;
+  return unused.find((it) => it.dimension === current.dimension);
+}
 
 function item(id, dimension, kind) {
   return { id, kind, widget: "smash", prompt: id, dimension };
@@ -13,18 +18,9 @@ const tapWordsC = item("e", "words", "tap");
 const bank = [tapWords, tapWordsB, dragWords, tapLetters, tapWordsC];
 
 const checks = [
-  [
-    "same dimension+kind preferred",
-    nextSameSkill(bank, tapWords, new Set([tapWords.id]))?.id === "b",
-  ],
-  [
-    "skip used ids",
-    nextSameSkill(bank, tapWords, new Set(["a", "b", "e"]))?.id === "c",
-  ],
-  [
-    "undefined when only one item",
-    nextSameSkill([tapWords], tapWords, new Set()) === undefined,
-  ],
+  ["same dimension+kind preferred", nextSameSkill(bank, tapWords, new Set([tapWords.id]))?.id === "b"],
+  ["skip used ids", nextSameSkill(bank, tapWords, new Set(["a", "b", "e"]))?.id === "c"],
+  ["undefined when only one item", nextSameSkill([tapWords], tapWords, new Set()) === undefined],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);
