@@ -255,6 +255,62 @@ export const BANK_MODULES: ModuleDef[] = [
     ],
   },
   {
+    id: "rh-vowel-teams",
+    title: "Vowel teams",
+    track: "words",
+    skill: "ai/ay, ee/ea, oa/ow",
+    stretch: "stretch-hard",
+    dimensions: ["words", "vowelPhonics", "speaking"],
+    items: [
+      tap("TEAM-01", "What word?", [{ id: "rain", label: "rain" }, { id: "ran", label: "ran" }, { id: "run", label: "run" }], "rain", "words", { word: "rain" }),
+      tap("TEAM-02", "What word?", [{ id: "day", label: "day" }, { id: "dad", label: "dad" }, { id: "did", label: "did" }], "day", "words"),
+      tap("TEAM-03", "What word?", [{ id: "boat", label: "boat" }, { id: "bat", label: "bat" }, { id: "bit", label: "bit" }], "boat", "words"),
+      speakItem("TEAM-04", "Say rain.", "rain", "speaking", { word: "rain" }),
+    ],
+  },
+  {
+    id: "rh-r-controlled",
+    title: "r-controlled",
+    track: "words",
+    skill: "ar, or, er/ir/ur",
+    stretch: "stretch-hard",
+    dimensions: ["words", "vowelPhonics", "speaking"],
+    items: [
+      tap("RCTL-01", "What word?", [{ id: "car", label: "car" }, { id: "cat", label: "cat" }, { id: "can", label: "can" }], "car", "words", { word: "car" }),
+      tap("RCTL-02", "What word?", [{ id: "for", label: "for" }, { id: "far", label: "far" }, { id: "fur", label: "fur" }], "for", "words"),
+      tap("RCTL-03", "What word?", [{ id: "her", label: "her" }, { id: "hat", label: "hat" }, { id: "hit", label: "hit" }], "her", "words"),
+      speakItem("RCTL-04", "Say car.", "car", "speaking", { word: "car" }),
+    ],
+  },
+  {
+    id: "rh-two-syllable",
+    title: "Two-syllable chunks",
+    track: "words",
+    skill: "nap-kin, bas-ket, sun-set",
+    stretch: "stretch-hard",
+    dimensions: ["words", "speaking"],
+    items: [
+      tap("SYL-01", "Clap, then read.", [{ id: "napkin", label: "nap-kin" }, { id: "nap", label: "nap" }, { id: "kin", label: "kin" }], "napkin", "words", { word: "napkin" }),
+      tap("SYL-02", "Clap, then read.", [{ id: "basket", label: "bas-ket" }, { id: "bat", label: "bat" }, { id: "sit", label: "sit" }], "basket", "words"),
+      tap("SYL-03", "Clap, then read.", [{ id: "sunset", label: "sun-set" }, { id: "sun", label: "sun" }, { id: "set", label: "set" }], "sunset", "words"),
+      speakItem("SYL-04", "Say napkin.", "napkin", "speaking", { word: "napkin" }),
+    ],
+  },
+  {
+    id: "rh-endings",
+    title: "Endings",
+    track: "words",
+    skill: "-s, -ing, -ed",
+    stretch: "stretch-hard",
+    dimensions: ["words", "speaking"],
+    items: [
+      tap("END-01", "What word?", [{ id: "cats", label: "cats" }, { id: "cat", label: "cat" }, { id: "can", label: "can" }], "cats", "words"),
+      tap("END-02", "What word?", [{ id: "sitting", label: "sitting" }, { id: "sit", label: "sit" }, { id: "sat", label: "sat" }], "sitting", "words"),
+      tap("END-03", "What word?", [{ id: "jumped", label: "jumped" }, { id: "jump", label: "jump" }, { id: "jam", label: "jam" }], "jumped", "words"),
+      speakItem("END-04", "Say cats.", "cats", "speaking", { word: "cats" }),
+    ],
+  },
+  {
     id: "my-letter-names",
     title: "Letter names",
     track: "letters",
@@ -301,6 +357,20 @@ export const BANK_MODULES: ModuleDef[] = [
       speakItem("K-t1", "Say the name of t.", "t", "speaking", { letter: "t" }),
     ],
   },
+  {
+    id: "my-air-trace",
+    title: "Air-trace",
+    track: "letters",
+    skill: "Finger path after a real hit — no words",
+    stretch: "stretch-hard",
+    dimensions: ["letterRecognition", "phonemes", "speaking"],
+    items: [
+      tap("TR-s1", "Trace s in the air. Smash s when you did it.", letterChoices(["s", "a", "t"]), "s", "letterRecognition", { widget: "stamp", letter: "s" }),
+      tap("TR-t1", "Trace t in the air. Find t.", letterChoices(["t", "p", "n"]), "t", "letterRecognition", { letter: "t" }),
+      tap("TR-m1", "Trace m. Smash m.", letterChoices(["m", "s", "p"]), "m", "letterRecognition", { widget: "smash" }),
+      speakItem("TR-s2", "Say the name of s.", "s", "speaking", { letter: "s" }),
+    ],
+  },
 ];
 
 export const SCOUT_RH1: LessonItem[] = [
@@ -326,13 +396,26 @@ export function pathForPlacement(grade?: string, track: "letters" | "words" = "w
     if (grade === "A0") return ["my-letter-names"];
     if (grade === "A1") return ["my-letter-sounds", "my-find-it"];
     if (grade === "A2") return ["my-letter-names", "my-find-it"];
-    return ["my-letter-names", "my-letter-sounds", "my-find-it"];
+    return ["my-letter-names", "my-letter-sounds", "my-find-it", "my-air-trace"];
   }
   if (grade === "S") return ["rh-sound-speed"];
   if (grade === "L") return ["rh-letters", "rh-sound-speed"];
   if (grade === "C") return ["rh-letters", "rh-cvc-smash", "rh-vowel-contrast"];
-  return ["rh-cvc-smash", "rh-vowel-contrast", "rh-digraphs", "rh-blends", "rh-heart", "rh-sentences"];
+  return ["rh-cvc-smash", "rh-vowel-contrast", "rh-digraphs", "rh-blends", "rh-heart", "rh-sentences", "rh-silent-e", "rh-vowel-teams", "rh-r-controlled", "rh-two-syllable", "rh-endings"];
 }
 
-export const RH_STARTER_PATH = ["rh-sound-speed", "rh-cvc-smash", "rh-vowel-contrast", "rh-digraphs", "rh-blends", "rh-heart", "rh-sentences"];
-export const MY_STARTER_PATH = ["my-letter-names", "my-letter-sounds", "my-find-it"];
+export const RH_STARTER_PATH = [
+  "rh-sound-speed",
+  "rh-cvc-smash",
+  "rh-vowel-contrast",
+  "rh-digraphs",
+  "rh-blends",
+  "rh-heart",
+  "rh-sentences",
+  "rh-silent-e",
+  "rh-vowel-teams",
+  "rh-r-controlled",
+  "rh-two-syllable",
+  "rh-endings",
+];
+export const MY_STARTER_PATH = ["my-letter-names", "my-letter-sounds", "my-find-it", "my-air-trace"];

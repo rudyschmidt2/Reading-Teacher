@@ -5,7 +5,9 @@ export type ThemeId =
   | "airplanes"
   | "planets-space"
   | "bugs"
-  | "spaceships";
+  | "spaceships"
+  | "farming-equipment"
+  | "race-cars";
 
 export type ChildStatus = "active" | "waiting";
 export type Track = "letters" | "words";

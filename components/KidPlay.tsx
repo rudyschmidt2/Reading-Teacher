@@ -17,6 +17,7 @@ import {
   themeOf,
   wordsUnlocked,
 } from "@/lib/catalog";
+import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
 import { useHouse } from "@/lib/store";
 import type {
@@ -181,9 +182,11 @@ type SpeechRecognitionEvent = {
 function DragBoard({
   item,
   onDone,
+  themeId,
 }: {
   item: LessonItem;
   onDone: (ok: boolean) => void;
+  themeId?: ThemeId;
 }) {
   const [filled, setFilled] = useState<Record<string, Tile | undefined>>({});
   const [focus, setFocus] = useState(0);
@@ -230,7 +233,9 @@ function DragBoard({
           <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
         ))}
       </div>
-      <p className="text-center text-sm opacity-80">Tap a fat tile to send it. Same as a drag.</p>
+      <p className="text-center text-sm opacity-80">
+        {trayHint(themeId, slots.length)}
+      </p>
     </div>
   );
 }
@@ -280,7 +285,8 @@ export function ThemePicker({ kidId }: { kidId: string }) {
             <span className="text-5xl">{t.emoji}</span>
             <span>
               <span className="display block text-3xl">{t.label}</span>
-              <span className="text-lg opacity-70">{t.host}</span>
+              <span className="block text-lg font-bold opacity-80">{t.host}</span>
+              <span className="text-base opacity-70">{t.flavor}</span>
             </span>
           </button>
         ))}
@@ -384,9 +390,10 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     return false;
   };
 
+  const host = sittingHost(theme.id, `${kidId}-${today()}`);
   const onPick = (choiceId: string) => {
     if (!item || locked) return;
-    const ok = choiceId === item.correctId;
+    const ok = choiceId === paintCorrectId(item, theme.id);
     setLocked(true);
     const row = { id: item.id, rung: item.rung, ok, dim: item.dimension };
     const next = [...results, row];
@@ -404,11 +411,11 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     });
     if (ok) {
       setParty(true);
-      setBanner(theme.win);
+      setBanner(skinWin(theme.id, theme.win, `${kidId}-${today()}`));
       house.addStars(child.id, 1);
     } else {
       setShaken(choiceId);
-      setBanner(`${theme.miss} Not that one.`);
+      setBanner(skinMiss(theme.id, theme.miss, `${kidId}-${today()}`));
     }
     window.setTimeout(() => {
       setParty(false);
@@ -441,10 +448,12 @@ export function PlacementSession({ kidId }: { kidId: string }) {
 
   if (!item) return null;
   const lesson = asLesson(item);
+  lesson.choices = paintChoices(item, theme.id);
+  lesson.correctId = paintCorrectId(item, theme.id);
 
   return (
     <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
+      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
       <p className="display mt-4 text-center text-4xl leading-tight">{lesson.prompt}</p>
       <Replay prompt={lesson.prompt} hint={lesson.parentHint} />
       {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
@@ -470,11 +479,15 @@ function KidChrome({
   kidName,
   stars,
   themeId,
+  sitting,
+  hostEmoji,
   onEnough,
 }: {
   kidName: string;
   stars: number;
   themeId: ThemeId;
+  sitting?: string;
+  hostEmoji?: string;
   onEnough?: () => void;
 }) {
   const t = themeOf(themeId);
@@ -484,7 +497,7 @@ function KidChrome({
       <button
         type="button"
         className="host-float text-5xl"
-        aria-label={t.host}
+        aria-label={sitting ?? t.host}
         onPointerDown={() => {
           if (!onEnough) return;
           hold.current = window.setTimeout(onEnough, 1600);
@@ -493,9 +506,12 @@ function KidChrome({
           if (hold.current) window.clearTimeout(hold.current);
         }}
       >
-        {t.hostEmoji}
+        {hostEmoji ?? t.hostEmoji}
       </button>
-      <p className="display text-2xl">{kidName}</p>
+      <p className="display text-center text-2xl leading-tight">
+        {kidName}
+        <span className="mt-1 block text-sm font-bold opacity-80">{sitting ?? t.host}</span>
+      </p>
       <p className="rounded-full bg-white/20 px-4 py-2 text-xl font-black">⭐ {stars}</p>
     </div>
   );
@@ -560,8 +576,10 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
     );
   }
 
+  const seed = `${kidId}-${today()}`;
+  const host = sittingHost(theme.id, seed);
   const blockedWord = !wordsUnlocked(child) && (item.dimension === "words" || item.dimension === "sentences" || Boolean(item.word && item.slots && item.slots.length > 1));
-  const playItem: LessonItem = blockedWord
+  const rawPlay: LessonItem = blockedWord
     ? {
         id: "safe-letter-s",
         kind: "tap",
@@ -573,6 +591,11 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
         letter: "s",
       }
     : item;
+  const playItem: LessonItem = {
+    ...rawPlay,
+    choices: paintChoices(rawPlay, theme.id),
+    correctId: paintCorrectId(rawPlay, theme.id),
+  };
 
   const after = (ok: boolean, kind: PlayKind, spoken?: { text: string; pending: boolean }) => {
     house.recordAttempt({
@@ -601,11 +624,11 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
     }
     if (ok) {
       setParty(true);
-      setBanner(theme.win);
+      setBanner(skinWin(theme.id, theme.win, seed));
       house.addStars(child.id, 1);
       setWins((w) => w + 1);
     } else {
-      setBanner(`${theme.miss} Not that one.`);
+      setBanner(skinMiss(theme.id, theme.miss, seed));
     }
     window.setTimeout(() => {
       setParty(false);
@@ -651,7 +674,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
 
   return (
     <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
+      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
       <p className="mt-2 text-center text-lg opacity-80">{mode === "scout" ? "Secret tunnel" : "Today's adventure"}</p>
       <p className="display mt-3 text-center text-4xl leading-tight">{playItem.prompt}</p>
       <Replay prompt={playItem.prompt} hint={playItem.parentHint} />
@@ -668,7 +691,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
             }}
           />
         ) : null}
-        {playItem.kind === "drag" ? <DragBoard item={playItem} onDone={(ok) => after(ok, "drag")} /> : null}
+        {playItem.kind === "drag" ? <DragBoard item={playItem} themeId={theme.id} onDone={(ok) => after(ok, "drag")} /> : null}
         {playItem.kind === "speak" ? (
           <SpeakPanel
             target={playItem.speakTarget ?? playItem.word ?? playItem.letter ?? ""}

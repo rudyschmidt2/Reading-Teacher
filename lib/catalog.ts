@@ -40,6 +40,7 @@ export const THEMES: {
   hostEmoji: string;
   miss: string;
   win: string;
+  flavor: string;
 }[] = [
   {
     id: "large-animals",
@@ -49,6 +50,7 @@ export const THEMES: {
     hostEmoji: "🦊",
     miss: "Pip hiccups. Not that one.",
     win: "Pip gobbles it up!",
+    flavor: "Big animals. Smash, feed, gobble.",
   },
   {
     id: "airplanes",
@@ -58,6 +60,7 @@ export const THEMES: {
     hostEmoji: "✈️",
     miss: "Wobbly wings. Not that one.",
     win: "Zip flies through!",
+    flavor: "Wings, cargo, fly-through.",
   },
   {
     id: "planets-space",
@@ -67,6 +70,7 @@ export const THEMES: {
     hostEmoji: "🪐",
     miss: "Soft bounce. Not that one.",
     win: "Orbit lands. Rings sparkle!",
+    flavor: "Planets, moons, orbit pads.",
   },
   {
     id: "bugs",
@@ -76,6 +80,7 @@ export const THEMES: {
     hostEmoji: "🪲",
     miss: "Bop slides off. Not that one.",
     win: "Splat-jump! Stars pop!",
+    flavor: "Beetles, splat, leaf holes.",
   },
   {
     id: "spaceships",
@@ -85,6 +90,27 @@ export const THEMES: {
     hostEmoji: "🚀",
     miss: "Beam misses. Visor bonk. Not that one.",
     win: "Beamed up! Stars lock!",
+    flavor: "Ship, captain, beam lock.",
+  },
+  {
+    id: "farming-equipment",
+    label: "Farming and equipment",
+    emoji: "🚜",
+    host: "Tractor, chopper, truck, car, implement",
+    hostEmoji: "🚜",
+    miss: "Wheels spin. Hitch pin hops out. Not that one.",
+    win: "Hitch clicks. Tractor pulls through!",
+    flavor: "Trucks, chopping, wheat, silage, corn, tractors, implements, cars.",
+  },
+  {
+    id: "race-cars",
+    label: "Race cars",
+    emoji: "🏎️",
+    host: "Rev and the pit crew",
+    hostEmoji: "🏎️",
+    miss: "Car wobbles off the track. Helmet bonk. Not that one.",
+    win: "Checkered flag. Helmet visor flash!",
+    flavor: "Race cars, tracks, helmets, pit stops.",
   },
 ];
 

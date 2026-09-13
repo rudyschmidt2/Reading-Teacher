@@ -20,4 +20,4 @@ npm run dev
 | Myles | 3 | Letters and sounds only until unlock |
 | Cassidy | 1 | Waiting. No lessons. |
 
-Daily themes (kid-picked): large animals, airplanes, planets and space, bugs, spaceships.
+Daily themes (kid-picked): large animals, airplanes, planets and space, bugs, spaceships, farming and equipment (trucks, choppers, wheat, silage, corn, tractors, implements, cars), race cars.

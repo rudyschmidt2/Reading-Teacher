@@ -53,11 +53,17 @@ function load(): HouseState {
     return {
       ...parsed,
       modules: [...parsed.modules, ...extras],
-      kids: parsed.kids.map((k) => ({
-        ...STARTER_KIDS.find((s) => s.id === k.id),
-        ...k,
-        name: k.id === "myles" ? "Myles" : k.name,
-      })),
+      kids: parsed.kids.map((k) => {
+        const starter = STARTER_KIDS.find((s) => s.id === k.id);
+        const have = new Set(k.path ?? []);
+        const extraPath = (starter?.path ?? []).filter((id) => !have.has(id));
+        return {
+          ...starter,
+          ...k,
+          name: k.id === "myles" ? "Myles" : k.name,
+          path: [...(k.path ?? starter?.path ?? []), ...extraPath],
+        };
+      }),
       scouts: parsed.scouts ?? [],
     };
   } catch {
