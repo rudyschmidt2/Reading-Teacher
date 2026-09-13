@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #1a1033;
+  --paper: #fff7ed;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  color: var(--ink);
+  background: #0b1020;
+  font-family: var(--font-nunito), ui-rounded, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.theme-large-animals {
+  --bg1: #14532d;
+  --bg2: #365314;
+  --accent: #f59e0b;
+  --card: #fef3c7;
+}
+
+.theme-airplanes {
+  --bg1: #0369a1;
+  --bg2: #38bdf8;
+  --accent: #ef4444;
+  --card: #e0f2fe;
+}
+
+.theme-planets-space {
+  --bg1: #1e1b4b;
+  --bg2: #4c1d95;
+  --accent: #fbbf24;
+  --card: #ede9fe;
+}
+
+.theme-bugs {
+  --bg1: #3f6212;
+  --bg2: #a21caf;
+  --accent: #84cc16;
+  --card: #f5d0fe;
+}
+
+.theme-spaceships {
+  --bg1: #111827;
+  --bg2: #0e7490;
+  --accent: #22d3ee;
+  --card: #cffafe;
+}
+
+.theme-farming-equipment {
+  --bg1: #3f2a0a;
+  --bg2: #a16207;
+  --accent: #4d7c0f;
+  --card: #fef08a;
+}
+
+.theme-race-cars {
+  --bg1: #1c1917;
+  --bg2: #b91c1c;
+  --accent: #f8fafc;
+  --card: #fecaca;
+}
+
+.kid-stage {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 28%),
+    radial-gradient(circle at 90% 80%, #fff2 0%, transparent 32%),
+    linear-gradient(165deg, var(--bg1), var(--bg2));
+  color: white;
+}
+
+.fat-card {
+  min-height: 120px;
+  border-radius: 28px;
+  background: var(--card, #fff);
+  color: #1a1033;
+  box-shadow: 0 10px 0 rgb(0 0 0 / 0.18);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.fat-card:active {
+  transform: translateY(6px) scale(0.98);
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.18);
+}
+
+.bounce-in {
+  animation: pop 380ms cubic-bezier(0.2, 1.4, 0.3, 1);
+}
+
+.wobble {
+  animation: wobble 420ms ease;
+}
+
+.party {
+  animation: party 900ms ease;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px) rotate(-3deg);
+  }
+  75% {
+    transform: translateX(10px) rotate(3deg);
+  }
+}
+
+@keyframes party {
+  0% {
+    transform: scale(0.8) rotate(-4deg);
+  }
+  40% {
+    transform: scale(1.12) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.host-float {
+  animation: floaty 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bounce-in,
+  .wobble,
+  .party,
+  .host-float,
+  .fat-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.vowel-a {
+  background: #e11d48;
+  color: white;
+}
+.vowel-e {
+  background: #ca8a04;
+  color: #1a1033;
+}
+.vowel-i {
+  background: #4338ca;
+  color: white;
+}
+.vowel-o {
+  background: #ea580c;
+  color: white;
+}
+.vowel-u {
+  background: #7e22ce;
+  color: white;
+}
+
+.parent-desk {
+  min-height: 100dvh;
+  background: #f4f1ea;
+  color: #1f2937;
+}
+
+.hold-fill {
+  animation: hold 1.6s linear forwards;
+}
+
+@keyframes hold {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
