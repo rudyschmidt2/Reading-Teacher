@@ -408,7 +408,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   return (
     <main className="kid-stage theme-planets-space px-4 py-8">
       <StageHeading eyebrow={`${child.name}'s pick`} title="Today's skin" sub="Smash one. You can pick a different one tomorrow." />
-      <div className="mx-auto mt-8 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4 md:max-w-3xl md:grid-cols-2">
         {THEMES.map((t, k) => (
           <button
             key={t.id}
@@ -421,7 +421,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
               <span className="emoji-3d">{t.emoji}</span>
             </span>
             <span className="relative min-w-0 flex-1">
-              <span className="display block text-3xl leading-none">{t.label}</span>
+              <span className="display block text-2xl leading-none sm:text-3xl">{t.label}</span>
               <span className="mt-1.5 block truncate text-sm font-extrabold uppercase tracking-wide opacity-60">{t.host}</span>
               <span className="mt-1 block text-sm font-semibold leading-snug opacity-75">{t.flavor}</span>
             </span>
