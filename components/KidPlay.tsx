@@ -31,7 +31,9 @@ import {
 import { scorePlacement, struggleStop, type PlacementRow } from "@/lib/placement";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
+import { nextSameSkill } from "@/lib/skip-stuck";
 import { useHouse } from "@/lib/store";
+import { tripSessionLength } from "@/lib/trip";
 import type {
   Choice,
   LessonItem,
@@ -621,28 +623,40 @@ function KidChrome({
 }) {
   const t = themeOf(themeId);
   const hold = useRef<number | null>(null);
-  const clear = () => {
-    if (hold.current) window.clearTimeout(hold.current);
+  const [holding, setHolding] = useState(false);
+
+  const startHold = () => {
+    if (!onEnough) return;
+    setHolding(true);
+    hold.current = window.setTimeout(onEnough, 1600);
   };
+  const endHold = () => {
+    setHolding(false);
+    if (hold.current) window.clearTimeout(hold.current);
+    hold.current = null;
+  };
+
   return (
     <div className="hud glass mx-auto max-w-lg">
       <button
         type="button"
-        className="orb host-float h-14 w-14 shrink-0 text-3xl"
-        aria-label={sitting ?? t.host}
-        onPointerDown={() => {
-          if (!onEnough) return;
-          hold.current = window.setTimeout(onEnough, 1600);
-        }}
-        onPointerUp={clear}
-        onPointerLeave={clear}
-        onPointerCancel={clear}
+        className={`hold-ring relative grid h-16 w-16 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}
+        aria-label={`${sitting ?? t.host}. Hold for that's enough.`}
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onContextMenu={(e) => e.preventDefault()}
       >
-        <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
+        <span className="orb host-float h-14 w-14 text-3xl">
+          <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
+        </span>
       </button>
       <p className="display min-w-0 flex-1 text-center text-2xl leading-none">
         {kidName}
-        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">{sitting ?? t.host}</span>
+        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">
+          {holding ? "Keep holding…" : "Hold for that's enough."}
+        </span>
       </p>
       <span className="star-pill text-xl">
         <StarIcon size={20} className="text-amber-700 drop-shadow" />
@@ -677,6 +691,7 @@ export function DailySession({
   const [shaken, setShaken] = useState<string>();
   const [wins, setWins] = useState(0);
   const start = useRef(Date.now());
+  const usedIds = useRef<Set<string>>(new Set());
   const item = queue[i];
   usePromptRepeat(item?.prompt);
 
@@ -684,7 +699,9 @@ export function DailySession({
     if (!module) return;
     const base = module.items;
     if (mode === "scout") {
-      setQueue(child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1);
+      const scout = child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
+      usedIds.current = new Set(scout.map((it) => it.id));
+      setQueue(scout);
     } else {
       const taps = base.filter((it) => it.kind === "tap");
       const drags = base.filter((it) => it.kind === "drag");
@@ -693,8 +710,12 @@ export function DailySession({
       const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
       const rest = base.filter((it) => !used.has(it.id));
       const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean);
-      const n = mode === "try" ? lead.length : child?.sessionLength === "shorter" ? 5 : child?.sessionLength === "longer" ? 9 : 7;
-      setQueue(lead.slice(0, n));
+      const width = typeof window !== "undefined" ? window.innerWidth : 1024;
+      const session = tripSessionLength(child?.sessionLength ?? "standard", width);
+      const n = mode === "try" ? lead.length : session === "shorter" ? 5 : session === "longer" ? 9 : 7;
+      const next = lead.slice(0, n);
+      usedIds.current = new Set(next.map((it) => it.id));
+      setQueue(next);
     }
   }, [module, mode, child?.sessionLength, child?.track]);
 
@@ -822,6 +843,21 @@ export function DailySession({
         setVersion(0);
         setI((n) => Math.min(n + 1, queue.length - 1));
         if (i + 1 >= queue.length) router.push(`/kids/${kidId}/done?kind=${mode}&module=${module.id}`);
+      } else if (version + 1 >= 2) {
+        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : module.items;
+        const alt = nextSameSkill(bank, item, usedIds.current);
+        if (alt) {
+          usedIds.current.add(alt.id);
+          setQueue((q) => {
+            const copy = [...q];
+            copy[i] = alt;
+            return copy;
+          });
+          setVersion(0);
+          setBanner(null);
+        } else {
+          setVersion((v) => v + 1);
+        }
       } else {
         setVersion((v) => v + 1);
       }

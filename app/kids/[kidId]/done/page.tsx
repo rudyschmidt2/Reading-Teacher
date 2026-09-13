@@ -2,20 +2,37 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { HomeIcon, SparklesIcon, StarIcon, TrophyIcon } from "@/components/Icons";
 import { Loading } from "@/components/KidPlay";
 import { themeOf } from "@/lib/catalog";
+import { scoutDue } from "@/lib/scout";
 import { useHouse } from "@/lib/store";
 
 export default function DonePage() {
   const { kidId } = useParams<{ kidId: string }>();
   const search = useSearchParams();
-  const { kid, ready } = useHouse();
+  const { kid, ready, markDailyDone, markScoutDone } = useHouse();
   const child = kid(kidId);
   const theme = themeOf(child?.themeToday);
   const kind = search.get("kind");
+  const marked = useRef(false);
+
+  useEffect(() => {
+    if (!ready || !child || marked.current) return;
+    if (kind === "scout") {
+      marked.current = true;
+      markScoutDone(kidId);
+      return;
+    }
+    if (kind && kind !== "daily") return;
+    marked.current = true;
+    markDailyDone(kidId);
+  }, [ready, child, kind, kidId, markDailyDone, markScoutDone]);
+
   if (!ready || !child) return <Loading />;
   const line = search.get("line") ?? child.kidLine ?? theme.win;
+  const offerTunnel = kind !== "scout" && scoutDue(child);
   return (
     <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center px-4 py-10 text-center`}>
       <div className="relative">
@@ -43,10 +60,18 @@ export default function DonePage() {
         <span className="text-base font-extrabold uppercase tracking-wide opacity-70">stars</span>
       </div>
 
-      <Link href="/kids" className="btn-glow rise-in stagger-4 mt-10 inline-flex items-center gap-3 px-9 py-4 text-2xl font-black">
-        <HomeIcon size={26} />
-        Home
-      </Link>
+      <div className="mt-10 flex w-full max-w-md flex-col items-center gap-3">
+        {offerTunnel ? (
+          <Link href={`/kids/${kidId}/play?mode=scout`} className="btn-glow rise-in stagger-4 inline-flex items-center gap-3 px-9 py-4 text-2xl font-black">
+            <SparklesIcon size={26} />
+            {theme.host} found a secret tunnel. Another adventure?
+          </Link>
+        ) : null}
+        <Link href="/kids" className="btn-glow rise-in stagger-4 inline-flex items-center gap-3 px-9 py-4 text-2xl font-black">
+          <HomeIcon size={26} />
+          Home
+        </Link>
+      </div>
     </main>
   );
 }

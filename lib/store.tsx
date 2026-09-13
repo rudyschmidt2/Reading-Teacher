@@ -62,6 +62,7 @@ function load(): HouseState {
           ...k,
           name: k.id === "myles" ? "Myles" : k.name,
           path: [...(k.path ?? starter?.path ?? []), ...extraPath],
+          dailySessions: k.dailySessions ?? 0,
         };
       }),
       scouts: parsed.scouts ?? [],
@@ -93,6 +94,8 @@ type HouseApi = {
   addChild: (name: string, birthday: string, status: ChildStatus) => void;
   saveScout: (report: ScoutReport) => void;
   resolveScout: (kidId: string, status: "approved" | "ignored", ease?: boolean) => void;
+  markDailyDone: (kidId: string) => void;
+  markScoutDone: (kidId: string) => void;
   applyFromSheet: (kidId: string, moduleId: string, action: "done" | "ease" | "harden" | "hold") => void;
   resetHouse: () => void;
 };
@@ -216,6 +219,17 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
           }
           return { ...c, parentUnlockedWords: false, track: "letters" };
         }),
+      markDailyDone: (kidId) =>
+        patchKid(kidId, (c) => ({
+          ...c,
+          dailySessions: (c.dailySessions ?? 0) + 1,
+          lastDailyDate: new Date().toISOString().slice(0, 10),
+        })),
+      markScoutDone: (kidId) =>
+        patchKid(kidId, (c) => ({
+          ...c,
+          lastScoutDate: new Date().toISOString().slice(0, 10),
+        })),
       saveScout: (report) =>
         setState((s) => ({
           ...s,
@@ -279,6 +293,7 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
           sessionLength: "standard",
           readyForPrintWords: track === "words",
           parentUnlockedWords: track === "words",
+          dailySessions: 0,
         };
         setState((s) => ({ ...s, kids: [...s.kids, child] }));
       },

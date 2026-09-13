@@ -5,6 +5,7 @@ import Link from "next/link";
 import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey, type DimensionStatus } from "@/lib/grades";
+import { scoutDueReason } from "@/lib/scout";
 import { useHouse } from "@/lib/store";
 import type { Child, ModuleVerdict, Stretch } from "@/lib/types";
 import {
@@ -656,42 +657,49 @@ function LastSession({ childId }: { childId: string }) {
 
 function ScoutCard({ kidId }: { kidId: string }) {
   const house = useHouse();
+  const child = house.kid(kidId);
   const report = [...house.state.scouts].reverse().find((s) => s.kidId === kidId);
-  if (!report) return null;
+  const dueLine = child ? scoutDueReason(child) : null;
+  if (!report && !dueLine) return null;
   return (
     <Card title="Scout map" icon={<TelescopeIcon size={18} />} sub="Daily does not auto-change.">
-      <div className="flex flex-wrap gap-1.5">
-        <span className="badge badge--info">Pack {report.pack}</span>
-        <span className="badge badge--muted">ceiling {report.ceiling}</span>
-        <span className="badge badge--muted">floor {report.floor}</span>
-        <span className={`badge ${report.status === "approved" ? "badge--good" : report.status === "pending" ? "badge--warn" : "badge--muted"}`}>{report.status}</span>
-      </div>
-      <ul className="mt-3 flex flex-wrap gap-1.5 text-sm">
-        {report.bands.map((b) => (
-          <li key={b.name} className="desk-tile px-3 py-1.5 text-slate-200">
-            {b.name}: <span className={b.tag === "known" ? "text-emerald-300" : b.tag === "shaky" ? "text-amber-300" : "text-slate-400"}>{b.tag}</span>
-          </li>
-        ))}
-      </ul>
-      {report.drafts.map((d) => (
-        <p key={d.title} className="mt-2 text-sm text-slate-300">
-          <span className="text-slate-500">Draft:</span> {d.title} — {d.skill} <span className="text-slate-500">({d.stretch})</span>
-        </p>
-      ))}
-      {report.status === "pending" ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="chip chip--on" onClick={() => house.resolveScout(kidId, "approved")}>
-            <CheckIcon size={12} />
-            Approve drafts
-          </button>
-          <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "approved", true)}>
-            Ease drafts
-          </button>
-          <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "ignored")}>
-            <XIcon size={12} />
-            Ignore
-          </button>
-        </div>
+      {dueLine ? <p className="mb-3 text-sm text-amber-200">{dueLine}</p> : null}
+      {report ? (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="badge badge--info">Pack {report.pack}</span>
+            <span className="badge badge--muted">ceiling {report.ceiling}</span>
+            <span className="badge badge--muted">floor {report.floor}</span>
+            <span className={`badge ${report.status === "approved" ? "badge--good" : report.status === "pending" ? "badge--warn" : "badge--muted"}`}>{report.status}</span>
+          </div>
+          <ul className="mt-3 flex flex-wrap gap-1.5 text-sm">
+            {report.bands.map((b) => (
+              <li key={b.name} className="desk-tile px-3 py-1.5 text-slate-200">
+                {b.name}: <span className={b.tag === "known" ? "text-emerald-300" : b.tag === "shaky" ? "text-amber-300" : "text-slate-400"}>{b.tag}</span>
+              </li>
+            ))}
+          </ul>
+          {report.drafts.map((d) => (
+            <p key={d.title} className="mt-2 text-sm text-slate-300">
+              <span className="text-slate-500">Draft:</span> {d.title} — {d.skill} <span className="text-slate-500">({d.stretch})</span>
+            </p>
+          ))}
+          {report.status === "pending" ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="chip chip--on" onClick={() => house.resolveScout(kidId, "approved")}>
+                <CheckIcon size={12} />
+                Approve drafts
+              </button>
+              <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "approved", true)}>
+                Ease drafts
+              </button>
+              <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "ignored")}>
+                <XIcon size={12} />
+                Ignore
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </Card>
   );

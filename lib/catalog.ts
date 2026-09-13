@@ -150,6 +150,7 @@ export const STARTER_KIDS: Child[] = [
     sessionLength: "standard",
     readyForPrintWords: true,
     parentUnlockedWords: true,
+    dailySessions: 0,
   },
   {
     id: "hudson",
@@ -163,6 +164,7 @@ export const STARTER_KIDS: Child[] = [
     sessionLength: "standard",
     readyForPrintWords: true,
     parentUnlockedWords: true,
+    dailySessions: 0,
   },
   {
     id: "myles",
@@ -176,6 +178,7 @@ export const STARTER_KIDS: Child[] = [
     sessionLength: "standard",
     readyForPrintWords: false,
     parentUnlockedWords: false,
+    dailySessions: 0,
   },
   {
     id: "cassidy",
@@ -189,6 +192,7 @@ export const STARTER_KIDS: Child[] = [
     sessionLength: "standard",
     readyForPrintWords: false,
     parentUnlockedWords: false,
+    dailySessions: 0,
   },
 ];
 

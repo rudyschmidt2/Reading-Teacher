@@ -61,3 +61,5 @@ The app manifest starts at the kids door. A service worker caches repeated voice
 | Cassidy | 1 | Waiting. No lessons. |
 
 Daily themes (kid-picked): large animals, airplanes, planets and space, bugs, spaceships, farming and equipment (trucks, choppers, wheat, silage, corn, tractors, implements, cars), race cars.
+
+House rules for later agents: [`docs/project-context.md`](docs/project-context.md). Work lanes (voice vs listen vs PWA vs play leftovers): [`docs/agent-lanes.md`](docs/agent-lanes.md).
