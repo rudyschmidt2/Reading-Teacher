@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey, type DimensionStatus } from "@/lib/grades";
 import { useHouse } from "@/lib/store";
@@ -20,6 +21,7 @@ import {
   PlusIcon,
   RefreshIcon,
   ShieldIcon,
+  SpeakerIcon,
   SparklesIcon,
   StarIcon,
   TelescopeIcon,
@@ -83,6 +85,57 @@ function KidSelect({ selected, onPick }: { selected?: string; onPick: (id: strin
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function VoiceCard() {
+  const [muted, setMuted] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setMuted(isVoiceMuted());
+    void voiceStatus().then((status) => setConfigured(status.configured));
+  }, []);
+
+  return (
+    <div className="desk-card mt-5 p-5">
+      <header className="flex items-center gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 text-indigo-200">
+          <SpeakerIcon size={18} />
+        </span>
+        <h3 className="text-lg font-black text-white">Voiceover</h3>
+      </header>
+      <p className="mt-2 text-sm text-slate-400">
+        Warm teacher voice. If a kid says what, huh, repeat, or again, the prompt plays again. Install the site as an app
+        on the tablet so the microphone stays on.
+      </p>
+      <button
+        type="button"
+        className={`chip mt-3 px-4 py-2 text-sm ${muted ? "" : "chip--on"}`}
+        onClick={() => {
+          const next = !muted;
+          setVoiceMuted(next);
+          setMuted(next);
+        }}
+      >
+        {muted ? "Voice off" : "Voice on"}
+      </button>
+      {configured === false ? (
+        <p className="mt-3 text-sm text-amber-200">
+          Natural voice is not set up. Add <span className="font-mono">OPENAI_API_KEY</span> in{" "}
+          <span className="font-mono">.env.local</span> (or the same name on Vercel) so Riley, Hudson, and Myles hear a
+          clear teacher. Kids still see the words. See the README.
+        </p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => speakPrompt("Stamp the one that says /s/.")}>
+          Hear a prompt
+        </button>
+        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => speakPhoneme("/s/")}>
+          Hear /s/
+        </button>
+      </div>
     </div>
   );
 }
@@ -159,6 +212,7 @@ export function ParentHome() {
           </Link>
         </header>
         <p className="mt-3 text-slate-400">Grades, speed, pass/fail. Kids never see this language.</p>
+        <VoiceCard />
         <div className="mt-5">
           <KidSelect selected={child?.id} onPick={setId} />
         </div>

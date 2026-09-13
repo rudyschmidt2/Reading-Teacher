@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fredoka, Nunito } from "next/font/google";
+import { PwaRegister } from "@/components/Pwa";
 import { HouseProvider } from "@/lib/store";
 import "./globals.css";
 
@@ -35,7 +36,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${fredoka.variable} ${nunito.variable} h-full`}>
       <body className="min-h-full">
-        <HouseProvider>{children}</HouseProvider>
+        <HouseProvider>
+          <PwaRegister />
+          {children}
+        </HouseProvider>
       </body>
     </html>
   );
