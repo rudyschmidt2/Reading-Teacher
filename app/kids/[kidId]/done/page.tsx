@@ -12,8 +12,8 @@ export default function DonePage() {
   const child = kid(kidId);
   const theme = themeOf(child?.themeToday);
   const kind = search.get("kind");
-  const line = search.get("line") ?? child.kidLine ?? theme.win;
   if (!ready || !child) return <p className="p-8">Loading…</p>;
+  const line = search.get("line") ?? child.kidLine ?? theme.win;
   return (
     <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center px-4`}>
       <p className="party text-8xl">{theme.hostEmoji}</p>
