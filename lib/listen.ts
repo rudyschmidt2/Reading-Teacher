@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { isRepeatAsk } from "./repeat-ask";
+import { useEffect, useRef, useState } from "react";
+import { isSpokenHit } from "./phonemes";
+import { isRepeatAsk, looksLikeAttempt } from "./repeat-ask";
 import { isVoiceMuted, isVoiceSpeaking, speak, subscribeVoiceIdle, subscribeVoiceStart } from "./voice";
 
 type Rec = {
@@ -14,19 +15,27 @@ type Rec = {
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
-  abort: () => void;
 };
 
 type RecEvent = {
   results: ArrayLike<{ isFinal?: boolean; 0: { transcript: string } }>;
 };
 
+type Turn = {
+  prompt: string;
+  target?: string;
+  onAnswer?: (heard: string, hit: boolean) => void;
+};
+
 const listenFns = new Set<(on: boolean) => void>();
+const heardFns = new Set<(text: string) => void>();
 let rec: Rec | null = null;
+let turn: Turn | null = null;
 let wanted = false;
-let paused = false;
-let promptOf = (): string => "";
+let halt = false;
 let armed = false;
+let restartTimer = 0;
+let lastHeard = "";
 
 function Ctor() {
   const w = window as unknown as {
@@ -44,7 +53,16 @@ function setListening(on: boolean) {
   listenFns.forEach((fn) => fn(on));
 }
 
+function setHeard(text: string) {
+  lastHeard = text;
+  heardFns.forEach((fn) => fn(text));
+}
+
 function stopRec() {
+  if (restartTimer) {
+    window.clearTimeout(restartTimer);
+    restartTimer = 0;
+  }
   if (!rec) {
     setListening(false);
     return;
@@ -55,25 +73,21 @@ function stopRec() {
   r.onerror = null;
   r.onend = null;
   try {
-    r.abort();
+    r.stop();
   } catch {
-    try {
-      r.stop();
-    } catch {
-      /* already stopped */
-    }
+    /* already stopped */
   }
   setListening(false);
 }
 
 function startRec() {
-  if (!wanted || paused || isVoiceMuted() || isVoiceSpeaking()) return;
+  if (!wanted || halt || !turn || isVoiceMuted() || isVoiceSpeaking()) return;
   const Make = Ctor();
   if (!Make) return;
   stopRec();
   const next = new Make();
   next.lang = "en-US";
-  next.continuous = true;
+  next.continuous = false;
   next.interimResults = true;
   next.maxAlternatives = 3;
   next.onresult = (e) => {
@@ -81,21 +95,36 @@ function startRec() {
     const last = rows[rows.length - 1];
     if (!last) return;
     const text = last[0].transcript;
-    if (!last.isFinal && !isRepeatAsk(text)) return;
-    if (!isRepeatAsk(text)) return;
-    const prompt = promptOf();
-    if (prompt) speak(prompt);
+    const live = turn;
+    if (!live) return;
+    const repeat = isRepeatAsk(text);
+    const hit = live.target ? isSpokenHit(text, live.target) : false;
+    if (!last.isFinal && !repeat && !hit) return;
+    if (repeat) {
+      speak(live.prompt);
+      return;
+    }
+    if (live.target && looksLikeAttempt(text)) {
+      setHeard(text);
+      if (hit) wanted = false;
+      live.onAnswer?.(text, hit);
+      if (hit) stopRec();
+    }
   };
   next.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       wanted = false;
+      setListening(false);
+      return;
     }
     setListening(false);
   };
   next.onend = () => {
     rec = null;
     setListening(false);
-    if (wanted && !paused && !isVoiceSpeaking()) window.setTimeout(startRec, 180);
+    if (wanted && !halt && turn && !isVoiceSpeaking()) {
+      restartTimer = window.setTimeout(startRec, 280);
+    }
   };
   rec = next;
   try {
@@ -104,19 +133,28 @@ function startRec() {
   } catch {
     rec = null;
     setListening(false);
+    if (wanted && !halt) restartTimer = window.setTimeout(startRec, 400);
   }
 }
 
-subscribeVoiceStart(() => stopRec());
+subscribeVoiceStart(() => {
+  halt = true;
+  stopRec();
+});
 subscribeVoiceIdle(() => {
-  if (wanted && !paused) startRec();
+  halt = false;
+  if (wanted) window.setTimeout(startRec, 220);
 });
 
 export function unlockKidMic() {
-  if (armed || typeof window === "undefined") return;
-  armed = true;
+  if (typeof window === "undefined") return;
   const Make = Ctor();
   if (!Make) return;
+  if (armed) {
+    if (wanted && !halt && !rec && !isVoiceSpeaking()) startRec();
+    return;
+  }
+  armed = true;
   const probe = new Make();
   probe.onerror = () => {};
   probe.onend = () => {};
@@ -128,32 +166,42 @@ export function unlockKidMic() {
   }
 }
 
-export function startRepeatListen(getPrompt: () => string) {
-  promptOf = getPrompt;
+function beginTurn(next: Turn) {
+  turn = next;
   wanted = true;
-  paused = false;
-  if (!isVoiceSpeaking()) startRec();
-  return () => {
-    wanted = false;
-    stopRec();
-  };
+  halt = isVoiceSpeaking();
+  setHeard("");
+  if (!halt) startRec();
 }
 
-export function pauseRepeatListen() {
-  paused = true;
+function endTurn() {
+  wanted = false;
+  turn = null;
   stopRec();
 }
 
-export function resumeRepeatListen() {
-  paused = false;
-  if (wanted && !isVoiceSpeaking()) startRec();
-}
+export function useLessonListen(opts: {
+  prompt?: string;
+  target?: string;
+  onAnswer?: (heard: string, hit: boolean) => void;
+  enabled?: boolean;
+}) {
+  const { prompt, target, onAnswer, enabled = true } = opts;
+  const answer = useRef(onAnswer);
+  answer.current = onAnswer;
 
-export function usePromptRepeat(prompt?: string) {
   useEffect(() => {
-    if (!prompt) return;
-    return startRepeatListen(() => prompt);
-  }, [prompt]);
+    if (!enabled || !prompt) {
+      endTurn();
+      return;
+    }
+    beginTurn({
+      prompt,
+      target,
+      onAnswer: (heard, hit) => answer.current?.(heard, hit),
+    });
+    return () => endTurn();
+  }, [prompt, target, enabled]);
 }
 
 export function useListening() {
@@ -167,4 +215,15 @@ export function useListening() {
   return on;
 }
 
-export { isRepeatAsk };
+export function useHeard() {
+  const [text, setText] = useState(lastHeard);
+  useEffect(() => {
+    heardFns.add(setText);
+    return () => {
+      heardFns.delete(setText);
+    };
+  }, []);
+  return text;
+}
+
+export { isRepeatAsk, isSpokenHit };

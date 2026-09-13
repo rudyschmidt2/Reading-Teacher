@@ -108,8 +108,8 @@ function VoiceCard() {
         <h3 className="text-lg font-black text-white">Voiceover</h3>
       </header>
       <p className="mt-2 text-sm text-slate-400">
-        Warm teacher voice. If a kid says what, huh, repeat, or again, the prompt plays again. Install the site as an app
-        on the tablet so the microphone stays on.
+        After the teacher talks, the app listens by itself. Kids just speak or tap — no start or stop. Say what or again
+        to hear the prompt again. Install on the tablet so the microphone stays on.
       </p>
       <button
         type="button"
