@@ -18,24 +18,43 @@ function styleFor(kind: SpeakKind) {
   return PROMPT_STYLE;
 }
 
+type TtsAuth = { url: string; key: string; model: string; label: "openai" | "gateway" };
+
+function openaiAuth(): TtsAuth | null {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) return null;
+  return {
+    url: "https://api.openai.com/v1/audio/speech",
+    key,
+    model: process.env.READING_TEACHER_TTS_MODEL?.trim() || "gpt-4o-mini-tts",
+    label: "openai",
+  };
+}
+
+function gatewayAuth(): TtsAuth | null {
+  const key = process.env.AI_GATEWAY_API_KEY?.trim();
+  if (!key) return null;
+  return {
+    url: "https://ai-gateway.vercel.sh/v1/audio/speech",
+    key,
+    model: process.env.READING_TEACHER_TTS_MODEL?.trim() || "openai/gpt-4o-mini-tts",
+    label: "gateway",
+  };
+}
+
 function ttsAuth() {
-  const openai = process.env.OPENAI_API_KEY?.trim();
-  if (openai) {
-    return {
-      url: "https://api.openai.com/v1/audio/speech",
-      key: openai,
-      model: process.env.READING_TEACHER_TTS_MODEL?.trim() || "gpt-4o-mini-tts",
-    };
+  return openaiAuth() ?? gatewayAuth();
+}
+
+function isQuota(status: number, detail: string) {
+  return status === 429 || /insufficient_quota|no credits remaining/i.test(detail);
+}
+
+function parentMessage(status: number, detail: string) {
+  if (isQuota(status, detail)) {
+    return "The OpenAI key is set, but that account has no credits. Add billing on OpenAI, or set AI_GATEWAY_API_KEY.";
   }
-  const gateway = process.env.AI_GATEWAY_API_KEY?.trim();
-  if (gateway) {
-    return {
-      url: "https://ai-gateway.vercel.sh/v1/audio/speech",
-      key: gateway,
-      model: process.env.READING_TEACHER_TTS_MODEL?.trim() || "openai/gpt-4o-mini-tts",
-    };
-  }
-  return null;
+  return "Teacher voice failed. Check OPENAI_API_KEY on Vercel.";
 }
 
 function missingKey() {
@@ -49,15 +68,7 @@ function missingKey() {
   );
 }
 
-async function synthesize(raw: string, kind: SpeakKind) {
-  const auth = ttsAuth();
-  if (!auth) return missingKey();
-
-  const spoken = prepareSpokenText(raw, kind).slice(0, MAX_TEXT);
-  if (!spoken) {
-    return NextResponse.json({ error: "empty_text" }, { status: 400 });
-  }
-
+async function callTts(auth: TtsAuth, spoken: string, kind: SpeakKind) {
   const voice = process.env.READING_TEACHER_VOICE?.trim() || "coral";
   const payload: Record<string, unknown> = {
     model: auth.model,
@@ -77,22 +88,51 @@ async function synthesize(raw: string, kind: SpeakKind) {
     },
     body: JSON.stringify(payload),
   });
+  if (res.ok) {
+    const audio = await res.arrayBuffer();
+    return { ok: true as const, audio };
+  }
+  const detail = await res.text().catch(() => "");
+  return { ok: false as const, status: res.status, detail };
+}
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    return NextResponse.json(
-      { configured: true, error: "tts_failed", status: res.status, detail: detail.slice(0, 240) },
-      { status: 502 },
-    );
+async function synthesize(raw: string, kind: SpeakKind) {
+  const first = openaiAuth();
+  const next = gatewayAuth();
+  if (!first && !next) return missingKey();
+
+  const spoken = prepareSpokenText(raw, kind).slice(0, MAX_TEXT);
+  if (!spoken) {
+    return NextResponse.json({ error: "empty_text" }, { status: 400 });
   }
 
-  const audio = await res.arrayBuffer();
-  return new NextResponse(audio, {
-    headers: {
-      "Content-Type": "audio/mpeg",
-      "Cache-Control": "public, max-age=31536000, immutable",
+  const order = [first, next].filter((a): a is TtsAuth => Boolean(a));
+  let last: { status: number; detail: string } | null = null;
+  for (const [i, auth] of order.entries()) {
+    const result = await callTts(auth, spoken, kind);
+    if (result.ok) {
+      return new NextResponse(result.audio, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+    last = { status: result.status, detail: result.detail };
+    const more = order[i + 1];
+    if (!more || !isQuota(result.status, result.detail)) break;
+  }
+
+  return NextResponse.json(
+    {
+      configured: true,
+      error: "tts_failed",
+      status: last?.status,
+      message: parentMessage(last?.status ?? 502, last?.detail ?? ""),
+      detail: (last?.detail ?? "").slice(0, 240),
     },
-  });
+    { status: 502 },
+  );
 }
 
 export async function GET(request: Request) {

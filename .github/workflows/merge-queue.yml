@@ -1,0 +1,46 @@
+name: Merge queue
+
+# Lands every open PR into main, oldest first: update the branch with main,
+# build it, merge it, then repeat so the remaining PRs are re-checked against
+# the new main. Conflicts get the `needs-rebase` label and a comment.
+#
+# Pushes made with the default GITHUB_TOKEN do not start new workflow runs, so
+# the schedule is the safety net that catches anything the event triggers miss.
+# Add a `MERGE_QUEUE_TOKEN` repo secret (a PAT with repo scope) to make the
+# queue's own pushes trigger the usual events too.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: merge-queue
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  queue:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Run the queue
+        run: node scripts/merge-queue.mjs run
+        env:
+          GH_TOKEN: ${{ secrets.MERGE_QUEUE_TOKEN || github.token }}

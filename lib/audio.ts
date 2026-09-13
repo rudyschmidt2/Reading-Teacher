@@ -1,6 +1,6 @@
 "use client";
 
-export { phonemeHint, prepareSpokenText, type SpeakKind } from "./phonemes";
+export { isSpokenHit, phonemeHint, prepareSpokenText, type SpeakKind } from "./phonemes";
 export {
   speak,
   speakLetter,
@@ -9,5 +9,14 @@ export {
   stopSpeech,
   isVoiceMuted,
   setVoiceMuted,
+  voiceLastError,
   voiceStatus,
 } from "./voice";
+export {
+  canListen,
+  isRepeatAsk,
+  unlockKidMic,
+  useHeard,
+  useLessonListen,
+  useListening,
+} from "./listen";

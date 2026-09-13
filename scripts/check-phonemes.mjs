@@ -1,28 +1,4 @@
-const SOUNDS = {
-  s: "ssss",
-  m: "mmm",
-  n: "nnn",
-  t: "tuh",
-  ă: "aaa, apple",
-};
-
-function expandPhonemeToken(raw) {
-  const inner = raw.trim().replace(/^\/+|\/+$/g, "");
-  return SOUNDS[inner] ?? SOUNDS[inner.toLowerCase()] ?? inner;
-}
-
-function letterName(raw) {
-  const ch = raw.trim().replace(/^\/+|\/+$/g, "").toLowerCase();
-  return ch === "s" ? "ess" : ch;
-}
-
-function prepareSpokenText(text, kind = "prompt") {
-  const raw = text.trim();
-  if (!raw) return "";
-  if (kind === "letter") return letterName(raw);
-  if (kind === "phoneme") return expandPhonemeToken(raw);
-  return raw.replace(/\/([^/]{1,4})\//g, (_, token) => expandPhonemeToken(token)).replace(/\s+/g, " ").trim();
-}
+import { expandPhonemeToken, letterName, prepareSpokenText } from "../lib/phonemes.ts";
 
 const checks = [
   ["/s/ is ssss", expandPhonemeToken("/s/") === "ssss"],
@@ -30,6 +6,7 @@ const checks = [
   ["/t/ is tuh", expandPhonemeToken("/t/") === "tuh"],
   ["/ă/ is apple cue", expandPhonemeToken("/ă/") === "aaa, apple"],
   ["prompt keeps words and expands /s/", prepareSpokenText("Stamp the one that says /s/.") === "Stamp the one that says ssss."],
+  ["prompt expands /ă/", prepareSpokenText("Which one says /ă/?") === "Which one says aaa, apple?"],
   ["letter s is ess", letterName("s") === "ess"],
   ["kind phoneme", prepareSpokenText("/n/", "phoneme") === "nnn"],
 ];

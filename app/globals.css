@@ -134,6 +134,10 @@
    Kid stage: layered gradient + drifting aurora blobs + soft dot grid
 --------------------------------------------------------------------------- */
 
+  /* Transparent borders (not padding) reserve the notch / home-indicator
+     zones on .kid-stage and .parent-desk so pages can still set their own
+     padding with py-* utilities while the background keeps painting edge to
+     edge beneath the system bars (viewport-fit=cover + translucent status bar). */
   .kid-stage {
     position: relative;
     isolation: isolate;
@@ -141,6 +145,8 @@
     color: white;
     background: linear-gradient(165deg, var(--bg1), var(--bg2));
     overflow-x: clip;
+    border-top: env(safe-area-inset-top, 0px) solid transparent;
+    border-bottom: env(safe-area-inset-bottom, 0px) solid transparent;
   }
 
   .kid-stage::before,
@@ -817,6 +823,8 @@
     isolation: isolate;
     min-height: 100dvh;
     color: #e5e7eb;
+    border-top: env(safe-area-inset-top, 0px) solid transparent;
+    border-bottom: env(safe-area-inset-bottom, 0px) solid transparent;
     background:
       radial-gradient(
         60% 40% at 0% 0%,

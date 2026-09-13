@@ -13,7 +13,62 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Kid voiceover uses OpenAI `gpt-4o-mini-tts` (voice `coral`) via `/api/voice`. Primary env: `OPENAI_API_KEY`. Optional: `AI_GATEWAY_API_KEY`, `READING_TEACHER_VOICE`, `READING_TEACHER_TTS_MODEL`. On Vercel, add `OPENAI_API_KEY` under Project → Settings → Environment Variables, then redeploy. If the key is missing, kids still see the big written prompt.
+Open [http://localhost:3000](http://localhost:3000).
+
+This is a Next.js App Router app and is meant to deploy on Vercel. The only environment variable is the voiceover key described below; everything else runs without configuration.
+
+## Working on it
+
+Each session gets its own worktree and branch; `main` is landed only by the merge queue.
+
+```bash
+npm run worktree -- <short-name>   # new worktree + branch off origin/main
+npm run sync                       # merge origin/main in before pushing
+```
+
+Push the branch, open a PR, and the [merge queue](.github/workflows/merge-queue.yml) updates it with `main`, builds it, and merges it. Details in [AGENTS.md](AGENTS.md).
+
+## Voiceover
+
+Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `coral`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Browser `speechSynthesis` is not used; it muffled phonemes.
+
+Add one of these to `.env.local` (local) or the Vercel project env (Production / Preview / Development):
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Yes (primary) | OpenAI key for `/v1/audio/speech`. Never commit it. |
+| `AI_GATEWAY_API_KEY` | Alternative | Used only if `OPENAI_API_KEY` is unset. Calls Vercel AI Gateway TTS. |
+| `READING_TEACHER_VOICE` | No | Voice id. Default `coral`. |
+| `READING_TEACHER_TTS_MODEL` | No | Default `gpt-4o-mini-tts` (or `openai/gpt-4o-mini-tts` on the gateway). |
+
+```bash
+cp .env.example .env.local
+# put the real key in .env.local
+```
+
+On Vercel: Project → Settings → Environment Variables → add `OPENAI_API_KEY`, then redeploy.
+
+If the key is missing, kids still see the big written prompt. If the key is set but OpenAI has no credits, the parent desk says so — add billing, or set `AI_GATEWAY_API_KEY`. Same phrases are cached so repeats stay snappy.
+
+Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
+
+### How a turn works
+
+The teacher speaks the prompt, then the app listens. Kids do not tap a mic on/off.
+
+- Tap / drag / trace: do the move. Say **what** or **again** if they missed the words.
+- Speak items: just say it. The orb says “I'm listening.” Wrong word is an honest miss; silence is not.
+- **Again** on the bottom toolbar (and the big prompt) play the line again. Hold **That's enough** there to finish.
+
+This needs the tablet microphone (Safari / Chrome). Install as an app so the mic stays allowed.
+
+### Install as an app (PWA)
+
+Yes — a PWA helps. On the iPad, **Add to Home Screen** (Share → Add) so Reading Teacher opens full-screen. That keeps the mic permission and makes voice + “what / again” more reliable than a browser tab.
+
+Chrome on Android: browser menu → Install app.
+
+The app manifest starts at the kids door. A service worker caches repeated voice clips. Use HTTPS (Vercel) for install.
 
 ## Kids
 
