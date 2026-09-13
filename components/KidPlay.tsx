@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { phonemeHint, speak } from "@/lib/audio";
+import { phonemeHint, speak, stopSpeech } from "@/lib/audio";
 import {
   SCOUT_MY1,
   SCOUT_RH1,
@@ -287,6 +287,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
 
   useEffect(() => {
     if (ready && child && child.status !== "waiting") speak("Pick today's game.");
+    return () => stopSpeech();
   }, [ready, child]);
 
   useEffect(() => {
@@ -350,6 +351,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   useEffect(() => {
     if (item) speak(item.prompt);
     start.current = Date.now();
+    return () => stopSpeech();
   }, [item]);
 
   if (!house.ready || !child) return <p className="p-8">Loading…</p>;
@@ -435,7 +437,9 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   return (
     <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
-      <p className="display mt-4 text-center text-4xl leading-tight">{lesson.prompt}</p>
+      <button type="button" onClick={() => speak(lesson.prompt)} className="display mt-4 w-full text-center text-4xl leading-tight">
+        {lesson.prompt}
+      </button>
       <Replay prompt={lesson.prompt} hint={lesson.parentHint} />
       {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
       <div className="mx-auto mt-6 max-w-lg">
@@ -546,6 +550,7 @@ export function DailySession({
   useEffect(() => {
     if (item) speak(item.prompt);
     start.current = Date.now();
+    return () => stopSpeech();
   }, [item]);
 
   if (!house.ready || !child) return <p className="p-8">Loading…</p>;
@@ -670,7 +675,9 @@ export function DailySession({
     <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
       <p className="mt-2 text-center text-lg opacity-80">{mode === "scout" ? "Secret tunnel" : "Today's adventure"}</p>
-      <p className="display mt-3 text-center text-4xl leading-tight">{playItem.prompt}</p>
+      <button type="button" onClick={() => speak(playItem.prompt)} className="display mt-3 w-full text-center text-4xl leading-tight">
+        {playItem.prompt}
+      </button>
       <Replay prompt={playItem.prompt} hint={playItem.parentHint} />
       {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
       <div className="mx-auto mt-6 max-w-lg">

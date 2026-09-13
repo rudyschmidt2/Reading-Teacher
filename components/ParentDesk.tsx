@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey } from "@/lib/grades";
 import { useHouse } from "@/lib/store";
@@ -21,6 +22,49 @@ function KidSelect({ selected, onPick }: { selected?: string; onPick: (id: strin
           {k.name}
         </button>
       ))}
+    </div>
+  );
+}
+
+function VoiceCard() {
+  const [muted, setMuted] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setMuted(isVoiceMuted());
+    void voiceStatus().then((status) => setConfigured(status.configured));
+  }, []);
+
+  return (
+    <div className="mt-4 rounded-2xl bg-white p-4">
+      <h3 className="font-black">Voiceover</h3>
+      <p className="text-sm text-stone-600">Warm teacher voice for lesson prompts and letter sounds.</p>
+      <button
+        type="button"
+        className={`mt-3 rounded-full px-4 py-2 ${muted ? "bg-stone-200" : "bg-stone-900 text-white"}`}
+        onClick={() => {
+          const next = !muted;
+          setVoiceMuted(next);
+          setMuted(next);
+        }}
+      >
+        {muted ? "Voice off" : "Voice on"}
+      </button>
+      {configured === false ? (
+        <p className="mt-3 text-sm text-amber-800">
+          Natural voice is not set up. Add <span className="font-mono">OPENAI_API_KEY</span> in{" "}
+          <span className="font-mono">.env.local</span> (or the same name on Vercel) so Riley, Hudson, and Myles hear a
+          clear teacher. Kids still see the words. See the README.
+        </p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className="rounded-full bg-stone-100 px-3 py-1 text-sm" onClick={() => speakPrompt("Stamp the one that says /s/.")}>
+          Hear a prompt
+        </button>
+        <button type="button" className="rounded-full bg-stone-100 px-3 py-1 text-sm" onClick={() => speakPhoneme("/s/")}>
+          Hear /s/
+        </button>
+      </div>
     </div>
   );
 }
@@ -64,6 +108,7 @@ export function ParentHome() {
         <p className="text-sm uppercase tracking-wide text-stone-500">Parent door</p>
         <h1 className="mt-1 text-3xl font-black">House desk</h1>
         <p className="mt-2 text-stone-600">Grades, speed, pass/fail. Kids never see this language.</p>
+        <VoiceCard />
         <div className="mt-4">
           <KidSelect selected={child?.id} onPick={setId} />
         </div>
