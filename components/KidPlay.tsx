@@ -111,6 +111,32 @@ function ChoiceGrid({
   );
 }
 
+function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) => void }) {
+  const [marks, setMarks] = useState(0);
+  return (
+    <div className="space-y-3">
+      <p className="text-center text-6xl font-black">{letter}</p>
+      <button
+        type="button"
+        className="fat-card mx-auto flex h-48 w-full max-w-sm items-center justify-center text-2xl"
+        onPointerMove={(e) => {
+          if (e.buttons) setMarks((n) => n + 1);
+        }}
+        onClick={() => setMarks((n) => n + 4)}
+      >
+        Trace {letter} with your finger
+      </button>
+      <button
+        type="button"
+        className="mx-auto block rounded-full bg-white px-6 py-3 text-xl font-black text-stone-900"
+        onClick={() => onDone(marks > 3)}
+      >
+        I traced it
+      </button>
+    </div>
+  );
+}
+
 function SpeakPanel({
   target,
   onResult,
@@ -517,12 +543,23 @@ function KidChrome({
   );
 }
 
-export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "scout" | "try" }) {
+export function DailySession({
+  kidId,
+  mode,
+  moduleId,
+}: {
+  kidId: string;
+  mode: "daily" | "scout" | "try";
+  moduleId?: string;
+}) {
   const house = useHouse();
   const router = useRouter();
   const child = house.kid(kidId);
   const theme = themeOf(child?.themeToday);
-  const module = child ? kidNextModule(child, house.state) : undefined;
+  const picked = moduleId ? house.module(moduleId) : undefined;
+  const safePicked =
+    picked && child && (child.track === "letters" && picked.track === "words" && !wordsUnlocked(child) ? undefined : picked);
+  const module = safePicked ?? (child ? kidNextModule(child, house.state) : undefined);
   const [queue, setQueue] = useState<LessonItem[]>([]);
   const [i, setI] = useState(0);
   const [version, setVersion] = useState(0);
@@ -539,13 +576,15 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
     if (mode === "scout") {
       setQueue(child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1);
     } else {
-      const n = child?.sessionLength === "shorter" ? 5 : child?.sessionLength === "longer" ? 9 : 7;
       const taps = base.filter((it) => it.kind === "tap");
       const drags = base.filter((it) => it.kind === "drag");
       const speaks = base.filter((it) => it.kind === "speak");
-      const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id].filter(Boolean));
+      const traces = base.filter((it) => it.widget === "trace");
+      const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
       const rest = base.filter((it) => !used.has(it.id));
-      setQueue([taps[0], drags[0], speaks[0], ...rest].filter(Boolean).slice(0, n));
+      const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean);
+      const n = mode === "try" ? lead.length : child?.sessionLength === "shorter" ? 5 : child?.sessionLength === "longer" ? 9 : 7;
+      setQueue(lead.slice(0, n));
     }
   }, [module, mode, child?.sessionLength, child?.track]);
 
@@ -680,7 +719,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
       <Replay prompt={playItem.prompt} hint={playItem.parentHint} />
       {banner ? <div className="mt-4"><HonestBanner text={banner} party={party} /></div> : null}
       <div className="mx-auto mt-6 max-w-lg">
-        {playItem.kind === "tap" ? (
+        {playItem.kind === "tap" && playItem.widget !== "trace" ? (
           <ChoiceGrid
             choices={playItem.choices ?? []}
             shaken={shaken}
@@ -692,6 +731,7 @@ export function DailySession({ kidId, mode }: { kidId: string; mode: "daily" | "
           />
         ) : null}
         {playItem.kind === "drag" ? <DragBoard item={playItem} themeId={theme.id} onDone={(ok) => after(ok, "drag")} /> : null}
+        {playItem.widget === "trace" ? <TracePad letter={playItem.letter ?? playItem.correctId ?? "s"} onDone={(ok) => after(ok, "tap")} /> : null}
         {playItem.kind === "speak" ? (
           <SpeakPanel
             target={playItem.speakTarget ?? playItem.word ?? playItem.letter ?? ""}

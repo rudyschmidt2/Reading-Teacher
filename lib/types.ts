@@ -28,7 +28,7 @@ export type GradeDimension =
 export type ModuleVerdict = "pass" | "fail" | "open";
 
 export type PlayKind = "tap" | "drag" | "speak";
-export type Widget = "smash" | "ear" | "feed" | "stamp" | "drag" | "say";
+export type Widget = "smash" | "ear" | "feed" | "stamp" | "drag" | "say" | "trace";
 export type TileKind = "letter" | "vowel" | "sound";
 export type Vowel = "a" | "e" | "i" | "o" | "u";
 

@@ -262,6 +262,15 @@ function PathEditor({ child }: { child: Child }) {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1">
+                  <Link
+                    href={`/kids/${child.id}/play?mode=try&module=${id}`}
+                    className="rounded-full bg-amber-300 px-3 py-1 text-sm font-bold text-stone-900"
+                    onClick={() => {
+                      if (!child.themeToday) house.pickTheme(child.id, "planets-space");
+                    }}
+                  >
+                    Try
+                  </Link>
                   <button type="button" className="rounded-full bg-white px-3 py-1 text-sm" disabled={index === 0} onClick={() => house.moveModule(child.id, index, index - 1)}>
                     Up
                   </button>
@@ -308,6 +317,37 @@ function PathEditor({ child }: { child: Child }) {
           );
         })}
       </ol>
+      <div className="mt-4">
+        <p className="font-bold">House library</p>
+        <p className="text-sm text-stone-600">Every shipped module. Add to this child’s path or try it.</p>
+        <ul className="mt-2 space-y-2">
+          {house.state.modules
+            .filter((m) => (child.track === "letters" && !wordsUnlocked(child) ? m.track === "letters" : true))
+            .map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 p-2">
+                <span>
+                  {m.title} <span className="text-sm opacity-70">({m.skill})</span>
+                </span>
+                <span className="flex gap-1">
+                  {!child.path.includes(m.id) ? (
+                    <button type="button" className="rounded-full bg-white px-3 py-1 text-sm" onClick={() => house.setPath(child.id, [...child.path, m.id])}>
+                      Add
+                    </button>
+                  ) : null}
+                  <Link
+                    href={`/kids/${child.id}/play?mode=try&module=${m.id}`}
+                    className="rounded-full bg-amber-300 px-3 py-1 text-sm font-bold text-stone-900"
+                    onClick={() => {
+                      if (!child.themeToday) house.pickTheme(child.id, "planets-space");
+                    }}
+                  >
+                    Try
+                  </Link>
+                </span>
+              </li>
+            ))}
+        </ul>
+      </div>
     </div>
   );
 }

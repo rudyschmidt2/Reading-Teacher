@@ -225,6 +225,7 @@ export const BANK_MODULES: ModuleDef[] = [
       tap("HRT-03", "Smash the.", [{ id: "the", label: "the" }, { id: "to", label: "to" }, { id: "a", label: "a" }], "the", "words"),
       tap("HRT-04", "Smash to.", [{ id: "to", label: "to" }, { id: "the", label: "the" }, { id: "I", label: "I" }], "to", "words"),
       tap("HRT-05", "Make: I sat.", [{ id: "I sat.", label: "I sat." }, { id: "A pin.", label: "A pin." }, { id: "The ant.", label: "The ant." }], "I sat.", "sentences"),
+      speakItem("HRT-06", "Say the.", "the", "speaking", { word: "the" }),
     ],
   },
   {
@@ -250,7 +251,10 @@ export const BANK_MODULES: ModuleDef[] = [
     dimensions: ["words", "vowelPhonics", "speaking"],
     items: [
       tap("CVE-01-read", "What word?", [{ id: "made", label: "made" }, { id: "mad", label: "mad" }, { id: "mid", label: "mid" }], "made", "words"),
+      tap("CVE-02-read", "What word?", [{ id: "like", label: "like" }, { id: "lick", label: "lick" }, { id: "lake", label: "lake" }], "like", "words"),
       tap("CVE-03-read", "What word?", [{ id: "hope", label: "hope" }, { id: "hop", label: "hop" }, { id: "hip", label: "hip" }], "hope", "words"),
+      tap("CVE-04-read", "What word?", [{ id: "cute", label: "cute" }, { id: "cut", label: "cut" }, { id: "cat", label: "cat" }], "cute", "words"),
+      dragWord("CVE-01", "made", ["m", "a", "d", "e", "i"], "a", "made", ["m", "a", "d", "e"]),
       speakItem("CVE-08", "Say hope.", "hope", "speaking", { word: "hope" }),
     ],
   },
@@ -264,7 +268,9 @@ export const BANK_MODULES: ModuleDef[] = [
     items: [
       tap("TEAM-01", "What word?", [{ id: "rain", label: "rain" }, { id: "ran", label: "ran" }, { id: "run", label: "run" }], "rain", "words", { word: "rain" }),
       tap("TEAM-02", "What word?", [{ id: "day", label: "day" }, { id: "dad", label: "dad" }, { id: "did", label: "did" }], "day", "words"),
-      tap("TEAM-03", "What word?", [{ id: "boat", label: "boat" }, { id: "bat", label: "bat" }, { id: "bit", label: "bit" }], "boat", "words"),
+      tap("TEAM-03", "What word?", [{ id: "see", label: "see" }, { id: "sat", label: "sat" }, { id: "set", label: "set" }], "see", "words"),
+      tap("TEAM-05", "What word?", [{ id: "boat", label: "boat" }, { id: "bat", label: "bat" }, { id: "bit", label: "bit" }], "boat", "words"),
+      dragWord("TEAM-01d", "rain", ["r", "ai", "n", "ay"], "a", "rain", ["r", "ai", "n"]),
       speakItem("TEAM-04", "Say rain.", "rain", "speaking", { word: "rain" }),
     ],
   },
@@ -279,6 +285,7 @@ export const BANK_MODULES: ModuleDef[] = [
       tap("RCTL-01", "What word?", [{ id: "car", label: "car" }, { id: "cat", label: "cat" }, { id: "can", label: "can" }], "car", "words", { word: "car" }),
       tap("RCTL-02", "What word?", [{ id: "for", label: "for" }, { id: "far", label: "far" }, { id: "fur", label: "fur" }], "for", "words"),
       tap("RCTL-03", "What word?", [{ id: "her", label: "her" }, { id: "hat", label: "hat" }, { id: "hit", label: "hit" }], "her", "words"),
+      dragWord("RCTL-01d", "car", ["c", "ar", "t"], "a", "car", ["c", "ar"]),
       speakItem("RCTL-04", "Say car.", "car", "speaking", { word: "car" }),
     ],
   },
@@ -293,6 +300,7 @@ export const BANK_MODULES: ModuleDef[] = [
       tap("SYL-01", "Clap, then read.", [{ id: "napkin", label: "nap-kin" }, { id: "nap", label: "nap" }, { id: "kin", label: "kin" }], "napkin", "words", { word: "napkin" }),
       tap("SYL-02", "Clap, then read.", [{ id: "basket", label: "bas-ket" }, { id: "bat", label: "bat" }, { id: "sit", label: "sit" }], "basket", "words"),
       tap("SYL-03", "Clap, then read.", [{ id: "sunset", label: "sun-set" }, { id: "sun", label: "sun" }, { id: "set", label: "set" }], "sunset", "words"),
+      dragHold("SYL-01d", "Park the first chunk: nap.", ["nap", "kin", "sun"], "nap", "words"),
       speakItem("SYL-04", "Say napkin.", "napkin", "speaking", { word: "napkin" }),
     ],
   },
@@ -365,9 +373,9 @@ export const BANK_MODULES: ModuleDef[] = [
     stretch: "stretch-hard",
     dimensions: ["letterRecognition", "phonemes", "speaking"],
     items: [
-      tap("TR-s1", "Trace s in the air. Smash s when you did it.", letterChoices(["s", "a", "t"]), "s", "letterRecognition", { widget: "stamp", letter: "s" }),
-      tap("TR-t1", "Trace t in the air. Find t.", letterChoices(["t", "p", "n"]), "t", "letterRecognition", { letter: "t" }),
-      tap("TR-m1", "Trace m. Smash m.", letterChoices(["m", "s", "p"]), "m", "letterRecognition", { widget: "smash" }),
+      tap("TR-s1", "Trace s in the air. Then smash s.", letterChoices(["s", "a", "t"]), "s", "letterRecognition", { widget: "trace", letter: "s" }),
+      tap("TR-t1", "Trace t in the air.", letterChoices(["t", "p", "n"]), "t", "letterRecognition", { widget: "trace", letter: "t" }),
+      tap("TR-m1", "Trace m.", letterChoices(["m", "s", "p"]), "m", "letterRecognition", { widget: "trace", letter: "m" }),
       speakItem("TR-s2", "Say the name of s.", "s", "speaking", { letter: "s" }),
     ],
   },
@@ -406,6 +414,7 @@ export function pathForPlacement(grade?: string, track: "letters" | "words" = "w
 
 export const RH_STARTER_PATH = [
   "rh-sound-speed",
+  "rh-letters",
   "rh-cvc-smash",
   "rh-vowel-contrast",
   "rh-digraphs",
