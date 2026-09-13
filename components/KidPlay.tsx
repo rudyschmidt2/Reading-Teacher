@@ -86,7 +86,7 @@ function Confetti({ count = 18 }: { count?: number }) {
 
 function HonestBanner({ text, party }: { text: string; party?: boolean }) {
   return (
-    <div role="status" className="fixed left-3 right-3 top-3 z-50 mx-auto max-w-lg">
+    <div role="status" className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-50 mx-auto max-w-lg">
       <div className={`banner relative text-3xl ${party ? "party banner--win" : "wobble banner--miss"}`}>
         {party ? <Confetti /> : null}
         <span className="relative inline-flex items-center justify-center gap-3">
