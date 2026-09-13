@@ -10,8 +10,39 @@ let playToken = 0;
 let current: HTMLAudioElement | null = null;
 let inflight: AbortController | null = null;
 let muted = false;
+let speaking = false;
 let configured: boolean | null = null;
 const memory = new Map<string, string>();
+const startFns = new Set<() => void>();
+const idleFns = new Set<() => void>();
+
+export function isVoiceSpeaking() {
+  return speaking;
+}
+
+export function subscribeVoiceStart(fn: () => void) {
+  startFns.add(fn);
+  return () => {
+    startFns.delete(fn);
+  };
+}
+
+export function subscribeVoiceIdle(fn: () => void) {
+  idleFns.add(fn);
+  return () => {
+    idleFns.delete(fn);
+  };
+}
+
+function markStart() {
+  speaking = true;
+  startFns.forEach((fn) => fn());
+}
+
+function markIdle() {
+  speaking = false;
+  idleFns.forEach((fn) => fn());
+}
 
 function readMute() {
   if (typeof window === "undefined") return false;
@@ -36,6 +67,7 @@ export function stopSpeech() {
   playToken += 1;
   inflight?.abort();
   inflight = null;
+  speaking = false;
   if (current) {
     current.pause();
     current.removeAttribute("src");
@@ -83,8 +115,17 @@ function playBlobUrl(src: string, token: number) {
   if (token !== playToken) return;
   const audio = new Audio(src);
   current = audio;
+  markStart();
+  const done = () => {
+    if (current === audio) {
+      current = null;
+      markIdle();
+    }
+  };
+  audio.onended = done;
+  audio.onerror = done;
   audio.play().catch(() => {
-    /* tablet autoplay block — Replay / prompt tap still works */
+    done();
   });
 }
 
@@ -95,6 +136,7 @@ async function playVoice(text: string, kind: SpeakKind) {
 
   stopSpeech();
   const token = playToken;
+  markStart();
   const url = voiceUrl(spoken, kind);
 
   const cached = await blobFromCache(url);
@@ -106,7 +148,10 @@ async function playVoice(text: string, kind: SpeakKind) {
     return;
   }
 
-  if (configured === false) return;
+  if (configured === false) {
+    markIdle();
+    return;
+  }
 
   const ac = new AbortController();
   inflight = ac;
@@ -114,14 +159,19 @@ async function playVoice(text: string, kind: SpeakKind) {
   try {
     res = await fetch(url, { signal: ac.signal, headers: { Accept: "audio/mpeg" } });
   } catch {
+    if (token === playToken) markIdle();
     return;
   }
   if (token !== playToken) return;
   if (res.status === 503) {
     configured = false;
+    markIdle();
     return;
   }
-  if (!res.ok) return;
+  if (!res.ok) {
+    markIdle();
+    return;
+  }
   configured = true;
   const blob = await res.blob();
   if (token !== playToken) return;

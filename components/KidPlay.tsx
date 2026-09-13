@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { phonemeHint, speak, stopSpeech } from "@/lib/audio";
+import { InstallHint } from "@/components/Pwa";
+import {
+  isRepeatAsk,
+  pauseRepeatListen,
+  phonemeHint,
+  resumeRepeatListen,
+  speak,
+  stopSpeech,
+  unlockKidMic,
+  useListening,
+  usePromptRepeat,
+} from "@/lib/audio";
 import {
   SCOUT_MY1,
   SCOUT_RH1,
@@ -140,9 +151,11 @@ function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) =>
 
 function SpeakPanel({
   target,
+  prompt,
   onResult,
 }: {
   target: string;
+  prompt: string;
   onResult: (ok: boolean, spoken: string, needsReview: boolean) => void;
 }) {
   const [hearing, setHearing] = useState(false);
@@ -155,23 +168,36 @@ function SpeakPanel({
       onResult(true, "", true);
       return;
     }
+    pauseRepeatListen();
     const rec = new SR();
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 3;
     setHearing(true);
+    let settled = false;
+    const finishListen = () => {
+      if (settled) return;
+      settled = true;
+      setHearing(false);
+      resumeRepeatListen();
+    };
     rec.onresult = (e: SpeechRecognitionEvent) => {
       const text = Array.from(e.results[0] ? [e.results[0][0].transcript] : []).join(" ").toLowerCase();
       setHeard(text);
-      setHearing(false);
+      finishListen();
+      if (isRepeatAsk(text)) {
+        speak(prompt);
+        return;
+      }
       const goal = target.toLowerCase().replace(/[./]/g, "");
       const hit = text.replace(/[./]/g, "").includes(goal.replace(/\s+/g, "")) || goal.includes(text.replace(/\s+/g, ""));
       onResult(hit, text, false);
     };
     rec.onerror = () => {
-      setHearing(false);
+      finishListen();
       onResult(false, "", true);
     };
+    rec.onend = () => finishListen();
     rec.start();
   };
 
@@ -199,6 +225,7 @@ type SpeechRecognition = {
   maxAlternatives: number;
   onresult: ((e: SpeechRecognitionEvent) => void) | null;
   onerror: (() => void) | null;
+  onend: (() => void) | null;
   start: () => void;
 };
 
@@ -284,11 +311,13 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   const { kid, pickTheme, ready } = useHouse();
   const router = useRouter();
   const child = kid(kidId);
+  const themePrompt = ready && child && child.status !== "waiting" ? "Pick today's game." : undefined;
+  usePromptRepeat(themePrompt);
 
   useEffect(() => {
-    if (ready && child && child.status !== "waiting") speak("Pick today's game.");
+    if (themePrompt) speak(themePrompt);
     return () => stopSpeech();
-  }, [ready, child]);
+  }, [themePrompt]);
 
   useEffect(() => {
     if (ready && child?.status === "waiting") router.replace(`/kids/${kidId}/waiting`);
@@ -306,7 +335,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   };
 
   return (
-    <main className="kid-stage theme-planets-space px-4 py-6">
+    <main className="kid-stage theme-planets-space px-4 py-6" onPointerDown={unlockKidMic}>
       <p className="display text-center text-5xl font-bold">Today&apos;s skin</p>
       <p className="mt-2 text-center text-xl">Smash one. You can pick a different one tomorrow.</p>
       <div className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3">
@@ -347,6 +376,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   const start = useRef(Date.now());
   const history = useRef<PlacementRow[]>([]);
   const item = plan[i];
+  usePromptRepeat(item?.prompt);
 
   useEffect(() => {
     if (item) speak(item.prompt);
@@ -435,7 +465,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(item, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-5`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
       <button type="button" onClick={() => speak(lesson.prompt)} className="display mt-4 w-full text-center text-4xl leading-tight">
         {lesson.prompt}
@@ -450,11 +480,15 @@ export function PlacementSession({ kidId }: { kidId: string }) {
 }
 
 function Replay({ prompt, hint }: { prompt: string; hint?: string }) {
+  const listening = useListening();
   return (
-    <div className="mt-3 flex justify-center gap-3">
+    <div className="mt-3 flex flex-col items-center gap-2">
       <button type="button" onClick={() => speak(prompt)} className="rounded-full bg-white/20 px-5 py-3 text-xl font-black">
         🔊 Again
       </button>
+      <p className="text-center text-base font-bold opacity-80">
+        {listening ? "Listening — say what or again" : "Say what or again"}
+      </p>
       {hint ? <p className="sr-only">{phonemeHint(hint)}</p> : null}
     </div>
   );
@@ -528,6 +562,7 @@ export function DailySession({
   const [wins, setWins] = useState(0);
   const start = useRef(Date.now());
   const item = queue[i];
+  usePromptRepeat(item?.prompt);
 
   useEffect(() => {
     if (!module) return;
@@ -672,7 +707,7 @@ export function DailySession({
   };
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-5`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-5`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
       <p className="mt-2 text-center text-lg opacity-80">{mode === "scout" ? "Secret tunnel" : "Today's adventure"}</p>
       <button type="button" onClick={() => speak(playItem.prompt)} className="display mt-3 w-full text-center text-4xl leading-tight">
@@ -697,6 +732,7 @@ export function DailySession({
         {playItem.kind === "speak" ? (
           <SpeakPanel
             target={playItem.speakTarget ?? playItem.word ?? playItem.letter ?? ""}
+            prompt={playItem.prompt}
             onResult={(ok, spoken, needsReview) => after(ok, "speak", { text: spoken, pending: needsReview })}
           />
         ) : null}
@@ -712,6 +748,7 @@ export function KidPicker() {
     <main className="kid-stage theme-planets-space px-4 py-6">
       <p className="display text-center text-5xl">Who&apos;s reading?</p>
       <p className="mt-2 text-center text-xl">Tap a face. Stars, not grades.</p>
+      <InstallHint />
       <div className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3">
         {state.kids.map((k) => (
           <Link

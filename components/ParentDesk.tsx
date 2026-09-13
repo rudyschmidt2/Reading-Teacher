@@ -38,7 +38,10 @@ function VoiceCard() {
   return (
     <div className="mt-4 rounded-2xl bg-white p-4">
       <h3 className="font-black">Voiceover</h3>
-      <p className="text-sm text-stone-600">Warm teacher voice for lesson prompts and letter sounds.</p>
+      <p className="text-sm text-stone-600">
+        Warm teacher voice. If a kid says what, huh, repeat, or again, the prompt plays again. Install the site as an app
+        on the tablet so the microphone stays on.
+      </p>
       <button
         type="button"
         className={`mt-3 rounded-full px-4 py-2 ${muted ? "bg-stone-200" : "bg-stone-900 text-white"}`}

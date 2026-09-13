@@ -11,3 +11,12 @@ export {
   setVoiceMuted,
   voiceStatus,
 } from "./voice";
+export {
+  canListen,
+  isRepeatAsk,
+  pauseRepeatListen,
+  resumeRepeatListen,
+  unlockKidMic,
+  useListening,
+  usePromptRepeat,
+} from "./listen";

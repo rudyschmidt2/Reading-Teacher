@@ -31,9 +31,21 @@ cp .env.example .env.local
 
 On Vercel: Project → Settings → Environment Variables → add `OPENAI_API_KEY`, then redeploy.
 
-If the key is missing, kids still see the big written prompt. The parent desk shows a note and Voice on / Voice off. Same phrases are cached (browser + HTTP) so repeats stay snappy.
+If the key is missing, kids still see the big written prompt. The parent desk shows a note and Voice on / Voice off. Same phrases are cached (browser + HTTP + PWA service worker) so repeats stay snappy.
 
 Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
+
+### Say “what” / “again”
+
+After a prompt, the app listens. If a child says **what**, **huh**, **repeat**, **again**, or “say it again”, the same prompt plays again. They can also tap the big words or **Again**. This needs the tablet microphone (Safari / Chrome).
+
+### Install as an app (PWA)
+
+Yes — a PWA helps. On the iPad, **Add to Home Screen** (Share → Add) so Reading Teacher opens full-screen. That keeps the mic permission and makes voice + “what / again” more reliable than a browser tab.
+
+Chrome on Android: browser menu → Install app.
+
+The app manifest starts at the kids door. A service worker caches repeated voice clips. Use HTTPS (Vercel) for install.
 
 ## Kids
 
