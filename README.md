@@ -1,16 +1,10 @@
 # Reading Teacher
 
-Phonics-first reading program for a ~7-year-old struggling reader.
+Phonics-first site for Riley (7), Hudson (6), Myles (3), and Cassidy (1, waiting).
 
-Short sessions, big type, calm UI, lots of wins. A parent can open it on a
-phone or tablet and the child can start immediately. No accounts, no signup,
-and no paid APIs.
+Kids pick a face, smash today’s theme, take placement, then play tap / drag / speak adventures. Honest miss: “not that one.” Stars only on real hits. Parent desk holds grades, speed, pass/fail, and the create / reorder / ease / harden loop.
 
-The first lesson teaches the letter sounds **m, a, t, s, p**, then builds the
-CVC words **mat, sat, map**. Progress is saved on the device with
-`localStorage`.
-
-## Run locally
+## Run
 
 ```bash
 npm install
@@ -19,14 +13,15 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Build
+This is a Next.js App Router app and is meant to deploy on Vercel. No environment variables are required.
 
-```bash
-npm run build
-```
+## Kids
 
-## Deploy on Vercel
+| Child | Age | Track |
+| --- | --- | --- |
+| Riley | 7 | Phonics / words |
+| Hudson | 6 | Same ladder, own pace |
+| Myles | 3 | Letters and sounds only until unlock |
+| Cassidy | 1 | Waiting. No lessons. |
 
-This is a Next.js App Router app and is meant to deploy on Vercel. Import the
-GitHub repository in the Vercel dashboard, or run `npx vercel` from this
-folder. No environment variables are required for v1.
+Daily themes (kid-picked): large animals, airplanes, planets and space, bugs, spaceships, farming and equipment (trucks, choppers, wheat, silage, corn, tractors, implements, cars), race cars.

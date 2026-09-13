@@ -1,34 +1,38 @@
 import type { Metadata, Viewport } from "next";
-import { Lexend } from "next/font/google";
+import { Fredoka, Nunito } from "next/font/google";
+import { HouseProvider } from "@/lib/store";
 import "./globals.css";
 
-const lexend = Lexend({
-  variable: "--font-lexend",
+const fredoka = Fredoka({
+  variable: "--font-fredoka",
   subsets: ["latin"],
-  display: "swap",
+  weight: ["500", "600", "700"],
+});
+
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
 });
 
 export const metadata: Metadata = {
   title: "Reading Teacher",
-  description:
-    "A calm, phonics-first reading practice for one young reader. Short sessions, big type, small wins.",
-  appleWebApp: {
-    capable: true,
-    title: "Reading Teacher",
-    statusBarStyle: "default",
-  },
+  description: "Phonics adventure for Riley, Hudson, Myles, and Cassidy.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f3eee2",
+  maximumScale: 1,
+  themeColor: "#1e1b4b",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${lexend.variable} h-full antialiased`}>
-      <body className="min-h-full bg-paper font-sans text-ink">{children}</body>
+    <html lang="en" className={`${fredoka.variable} ${nunito.variable} h-full`}>
+      <body className="min-h-full">
+        <HouseProvider>{children}</HouseProvider>
+      </body>
     </html>
   );
 }
