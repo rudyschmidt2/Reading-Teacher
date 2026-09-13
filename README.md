@@ -15,6 +15,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 This is a Next.js App Router app and is meant to deploy on Vercel. The only environment variable is the voiceover key described below; everything else runs without configuration.
 
+## Working on it
+
+Each session gets its own worktree and branch; `main` is landed only by the merge queue.
+
+```bash
+npm run worktree -- <short-name>   # new worktree + branch off origin/main
+npm run sync                       # merge origin/main in before pushing
+```
+
+Push the branch, open a PR, and the [merge queue](.github/workflows/merge-queue.yml) updates it with `main`, builds it, and merges it. Details in [AGENTS.md](AGENTS.md).
+
 ## Voiceover
 
 Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `coral`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Browser `speechSynthesis` is not used; it muffled phonemes.

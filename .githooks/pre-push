@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pushes to main go through pull requests; the merge queue lands them.
+if [[ -n "${ALLOW_MAIN:-}" ]]; then
+  exit 0
+fi
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/main" ]]; then
+    cat >&2 <<'EOF'
+Refusing to push directly to main.
+
+Push your session branch and open a PR against main; the merge queue merges it
+once it is up to date with main and the build passes.
+
+(Set ALLOW_MAIN=1 to override on purpose.)
+EOF
+    exit 1
+  fi
+done
+exit 0

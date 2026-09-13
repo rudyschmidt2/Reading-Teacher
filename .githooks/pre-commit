@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# main is landed by the merge queue only. Sessions commit on a branch in a worktree.
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ "$branch" == "main" && -z "${ALLOW_MAIN:-}" ]]; then
+  cat >&2 <<'EOF'
+Refusing to commit on main.
+
+Start a session worktree instead:
+  npm run worktree -- <short-name>
+
+(Set ALLOW_MAIN=1 to override on purpose.)
+EOF
+  exit 1
+fi
