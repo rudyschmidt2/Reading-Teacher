@@ -9,6 +9,7 @@ export {
   stopSpeech,
   isVoiceMuted,
   setVoiceMuted,
+  voiceLastError,
   voiceStatus,
 } from "./voice";
 export {

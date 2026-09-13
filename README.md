@@ -8,6 +8,8 @@ Kids pick a face, smash today’s theme, take placement, then play tap / drag / 
 
 ```bash
 npm install
+cp .env.example .env.local
+# put OPENAI_API_KEY in .env.local
 npm run dev
 ```
 
@@ -46,7 +48,7 @@ cp .env.example .env.local
 
 On Vercel: Project → Settings → Environment Variables → add `OPENAI_API_KEY`, then redeploy.
 
-If the key is missing, kids still see the big written prompt. The parent desk shows a note and Voice on / Voice off. Same phrases are cached (browser + HTTP + PWA service worker) so repeats stay snappy.
+If the key is missing, kids still see the big written prompt. If the key is set but OpenAI has no credits, the parent desk says so — add billing, or set `AI_GATEWAY_API_KEY`. Same phrases are cached so repeats stay snappy.
 
 Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
 
@@ -56,7 +58,7 @@ The teacher speaks the prompt, then the app listens. Kids do not tap a mic on/of
 
 - Tap / drag / trace: do the move. Say **what** or **again** if they missed the words.
 - Speak items: just say it. The orb says “I'm listening.” Wrong word is an honest miss; silence is not.
-- **Hear it again** and the big prompt stay as backups.
+- **Again** on the bottom toolbar (and the big prompt) play the line again. Hold **That's enough** there to finish.
 
 This needs the tablet microphone (Safari / Chrome). Install as an app so the mic stays allowed.
 

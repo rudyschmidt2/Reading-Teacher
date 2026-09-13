@@ -17,7 +17,7 @@ This lane owns:
 - Env: `OPENAI_API_KEY` (primary), `AI_GATEWAY_API_KEY`, `READING_TEACHER_VOICE`, `READING_TEACHER_TTS_MODEL`
 - No robotic browser fallback pretending to be natural. Missing key → written prompt only + parent note.
 
-Still owed on that PR: hear the voice with a real key on an iPad. Do not merge unless asked.
+The TTS module also lives on this leftover-play branch so voice can ship with the bottom toolbar. PR #3 still owns listen + PWA. Do not merge unless asked.
 
 ## Listen / “what-repeat” — same PR for now, split if it fights SpeakPanel
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceStatus } from "@/lib/audio";
+import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceLastError, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey, type DimensionStatus } from "@/lib/grades";
 import { scoutDueReason } from "@/lib/scout";
@@ -93,11 +93,21 @@ function KidSelect({ selected, onPick }: { selected?: string; onPick: (id: strin
 function VoiceCard() {
   const [muted, setMuted] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [hearNote, setHearNote] = useState<string | null>(null);
 
   useEffect(() => {
     setMuted(isVoiceMuted());
     void voiceStatus().then((status) => setConfigured(status.configured));
   }, []);
+
+  const hear = (play: () => void) => {
+    setHearNote(null);
+    play();
+    window.setTimeout(() => {
+      const err = voiceLastError();
+      if (err) setHearNote(err);
+    }, 1200);
+  };
 
   return (
     <div className="desk-card mt-5 p-5">
@@ -108,8 +118,8 @@ function VoiceCard() {
         <h3 className="text-lg font-black text-white">Voiceover</h3>
       </header>
       <p className="mt-2 text-sm text-slate-400">
-        After the teacher talks, the app listens by itself. Kids just speak or tap — no start or stop. Say what or again
-        to hear the prompt again. Install on the tablet so the microphone stays on.
+        After the teacher talks, the app listens by itself. Kids just speak or tap — no start or stop. The bottom toolbar
+        has Again and hold That&apos;s enough. Install on the tablet so the microphone stays on.
       </p>
       <button
         type="button"
@@ -129,11 +139,12 @@ function VoiceCard() {
           clear teacher. Kids still see the words. See the README.
         </p>
       ) : null}
+      {hearNote ? <p className="mt-3 text-sm text-amber-200">{hearNote}</p> : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => speakPrompt("Stamp the one that says /s/.")}>
+        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => hear(() => speakPrompt("Stamp the one that says /s/."))}>
           Hear a prompt
         </button>
-        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => speakPhoneme("/s/")}>
+        <button type="button" className="chip px-3 py-1.5 text-sm" onClick={() => hear(() => speakPhoneme("/s/"))}>
           Hear /s/
         </button>
       </div>

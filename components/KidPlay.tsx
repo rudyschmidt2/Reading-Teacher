@@ -51,6 +51,7 @@ import {
   LockIcon,
   MicIcon,
   SparklesIcon,
+  HomeIcon,
   SpeakerIcon,
   StarIcon,
   TelescopeIcon,
@@ -119,13 +120,11 @@ function coachLine(kind?: PlayKind, widget?: Widget, listening?: boolean) {
 function PromptCard({
   eyebrow,
   prompt,
-  hint,
   kind,
   widget,
 }: {
   eyebrow?: string;
   prompt: string;
-  hint?: string;
   kind?: PlayKind;
   widget?: Widget;
 }) {
@@ -137,7 +136,6 @@ function PromptCard({
         {prompt}
       </button>
       <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, listening)}</p>
-      <Replay prompt={prompt} hint={hint} />
     </section>
   );
 }
@@ -535,46 +533,28 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(item, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} onPointerDown={unlockKidMic}>
+      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={plan.length} current={i} />
-      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} hint={lesson.parentHint} kind="tap" widget={lesson.widget} />
+      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} kind="tap" widget={lesson.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
         <ChoiceGrid key={item.id} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
       </div>
+      <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
     </main>
   );
 }
 
-function Replay({ prompt, hint }: { prompt: string; hint?: string }) {
-  return (
-    <div className="mt-3 flex justify-center">
-      <button type="button" onClick={() => speak(prompt)} className="btn-ghost inline-flex items-center gap-2 px-5 py-2.5 text-lg font-black">
-        <SpeakerIcon size={22} />
-        Hear it again
-      </button>
-      {hint ? <p className="sr-only">{phonemeHint(hint)}</p> : null}
-    </div>
-  );
-}
-
-function KidChrome({
-  kidName,
-  stars,
-  themeId,
-  sitting,
-  hostEmoji,
+function PlayDock({
+  prompt,
+  hint,
   onEnough,
 }: {
-  kidName: string;
-  stars: number;
-  themeId: ThemeId;
-  sitting?: string;
-  hostEmoji?: string;
+  prompt: string;
+  hint?: string;
   onEnough?: () => void;
 }) {
-  const t = themeOf(themeId);
   const hold = useRef<number | null>(null);
   const [holding, setHolding] = useState(false);
 
@@ -590,26 +570,67 @@ function KidChrome({
   };
 
   return (
+    <nav className="play-dock" aria-label="Play tools">
+      <div className="play-dock__bar">
+        <button type="button" className="play-dock__again" onClick={() => speak(prompt)}>
+          <SpeakerIcon size={26} />
+          Again
+        </button>
+        {onEnough ? (
+          <button
+            type="button"
+            className="play-dock__enough"
+            aria-label="Hold for that's enough."
+            onPointerDown={startHold}
+            onPointerUp={endHold}
+            onPointerLeave={endHold}
+            onPointerCancel={endHold}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span className={`hold-ring relative grid h-12 w-12 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}>
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-[#1b1440] text-white">
+                <HomeIcon size={22} />
+              </span>
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block text-lg font-black leading-none">{holding ? "Keep holding…" : "That's enough"}</span>
+              <span className="mt-1 block text-xs font-extrabold uppercase tracking-wide text-white/70">
+                {holding ? "Almost…" : "Hold to finish"}
+              </span>
+              <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+                <span className={`block h-full rounded-full bg-gradient-to-r from-amber-300 to-fuchsia-400 ${holding ? "hold-fill" : "w-0"}`} />
+              </span>
+            </span>
+          </button>
+        ) : null}
+      </div>
+      {hint ? <p className="sr-only">{phonemeHint(hint)}</p> : null}
+    </nav>
+  );
+}
+
+function KidChrome({
+  kidName,
+  stars,
+  themeId,
+  sitting,
+  hostEmoji,
+}: {
+  kidName: string;
+  stars: number;
+  themeId: ThemeId;
+  sitting?: string;
+  hostEmoji?: string;
+}) {
+  const t = themeOf(themeId);
+  return (
     <div className="hud glass mx-auto max-w-lg">
-      <button
-        type="button"
-        className={`hold-ring relative grid h-16 w-16 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}
-        aria-label={`${sitting ?? t.host}. Hold for that's enough.`}
-        onPointerDown={startHold}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <span className="orb host-float h-14 w-14 text-3xl">
-          <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
-        </span>
-      </button>
+      <span className="orb host-float h-14 w-14 shrink-0 text-3xl" aria-label={sitting ?? t.host}>
+        <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
+      </span>
       <p className="display min-w-0 flex-1 text-center text-2xl leading-none">
         {kidName}
-        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">
-          {holding ? "Keep holding…" : "Hold for that's enough."}
-        </span>
+        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">{sitting ?? t.host}</span>
       </p>
       <span className="star-pill text-xl">
         <StarIcon size={20} className="text-amber-700 drop-shadow" />
@@ -828,10 +849,10 @@ export function DailySession({
   const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4`} onPointerDown={unlockKidMic}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} onPointerDown={unlockKidMic}>
+      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={queue.length} current={i} />
-      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} hint={playItem.parentHint} kind={playItem.kind} widget={playItem.widget} />
+      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} kind={playItem.kind} widget={playItem.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
         {playItem.kind === "tap" && playItem.widget !== "trace" ? (
@@ -852,6 +873,7 @@ export function DailySession({
           <SpeakPanel onParent={() => after(false, "speak", { text: "parent-listen", pending: true })} />
         ) : null}
       </div>
+      <PlayDock prompt={playItem.prompt} hint={playItem.parentHint} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
     </main>
   );
 }

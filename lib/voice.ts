@@ -12,6 +12,7 @@ let inflight: AbortController | null = null;
 let muted = false;
 let speaking = false;
 let configured: boolean | null = null;
+let lastError: string | null = null;
 const memory = new Map<string, string>();
 const startFns = new Set<() => void>();
 const idleFns = new Set<() => void>();
@@ -53,6 +54,10 @@ muted = typeof window !== "undefined" ? readMute() : false;
 
 export function isVoiceMuted() {
   return muted;
+}
+
+export function voiceLastError() {
+  return lastError;
 }
 
 export function setVoiceMuted(next: boolean) {
@@ -149,6 +154,7 @@ async function playVoice(text: string, kind: SpeakKind) {
   }
 
   if (configured === false) {
+    lastError = "Natural voice is not set up. Add OPENAI_API_KEY.";
     markIdle();
     return;
   }
@@ -165,14 +171,24 @@ async function playVoice(text: string, kind: SpeakKind) {
   if (token !== playToken) return;
   if (res.status === 503) {
     configured = false;
+    lastError = "Natural voice is not set up. Add OPENAI_API_KEY.";
     markIdle();
     return;
   }
   if (!res.ok) {
+    let message = "Teacher voice failed.";
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data.message) message = data.message;
+    } catch {
+      /* keep default */
+    }
+    lastError = message;
     markIdle();
     return;
   }
   configured = true;
+  lastError = null;
   const blob = await res.blob();
   if (token !== playToken) return;
   await remember(url, blob);
