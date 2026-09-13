@@ -11,6 +11,10 @@ npm install
 npm run dev
 ```
 
+Open [http://localhost:3000](http://localhost:3000).
+
+This is a Next.js App Router app and is meant to deploy on Vercel. The only environment variable is the voiceover key described below; everything else runs without configuration.
+
 ## Voiceover
 
 Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `coral`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Browser `speechSynthesis` is not used; it muffled phonemes.
