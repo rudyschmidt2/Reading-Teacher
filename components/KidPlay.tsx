@@ -362,7 +362,9 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   const finish = (extra: PlacementRow[]) => {
     const scored = scorePlacement(extra, isMyles ? "letters" : "words");
     house.finishPlacement(child.id, scored.grade, scored.note, scored.kidLine, scored.owned);
-    router.push(`/kids/${kidId}/done?kind=place`);
+    router.push(
+      `/kids/${kidId}/done?kind=place&shelf=${encodeURIComponent(scored.grade)}&line=${encodeURIComponent(scored.kidLine)}`,
+    );
   };
 
   const host = sittingHost(theme.id, `${kidId}-${today()}`);

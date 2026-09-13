@@ -113,6 +113,11 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(KEY, JSON.stringify(state));
   }, [ready, state]);
 
+  const persistNow = (next: HouseState) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(KEY, JSON.stringify(next));
+  };
+
   const patchKid = useCallback((kidId: string, fn: (c: Child) => Child) => {
     setState((s) => ({
       ...s,
@@ -147,7 +152,7 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
           const kid = s.kids.find((k) => k.id === kidId);
           if (!kid) return s;
           const path = pathForPlacement(grade, kid.track);
-          return {
+          const next = {
             ...s,
             kids: s.kids.map((k) =>
               k.id === kidId
@@ -155,6 +160,8 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
                 : k,
             ),
           };
+          persistNow(next);
+          return next;
         });
       },
       setPath: (kidId, path) => patchKid(kidId, (c) => ({ ...c, path })),
