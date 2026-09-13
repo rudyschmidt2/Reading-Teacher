@@ -283,16 +283,18 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   const { kid, pickTheme, ready } = useHouse();
   const router = useRouter();
   const child = kid(kidId);
-  if (!ready) return <p className="p-8">Loading…</p>;
-  if (!child) return <p className="p-8">Missing kid.</p>;
-  if (child.status === "waiting") {
-    router.replace(`/kids/${kidId}/waiting`);
-    return null;
-  }
 
   useEffect(() => {
-    speak("Pick today's game.");
-  }, []);
+    if (ready && child && child.status !== "waiting") speak("Pick today's game.");
+  }, [ready, child]);
+
+  useEffect(() => {
+    if (ready && child?.status === "waiting") router.replace(`/kids/${kidId}/waiting`);
+  }, [ready, child, kidId, router]);
+
+  if (!ready) return <p className="p-8">Loading…</p>;
+  if (!child) return <p className="p-8">Missing kid.</p>;
+  if (child.status === "waiting") return null;
 
   const choose = (id: ThemeId) => {
     pickTheme(kidId, id);
