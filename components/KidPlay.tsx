@@ -20,7 +20,9 @@ import {
 import { scorePlacement, struggleStop, type PlacementRow } from "@/lib/placement";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
+import { nextSameSkill } from "@/lib/skip-stuck";
 import { useHouse } from "@/lib/store";
+import { tripSessionLength } from "@/lib/trip";
 import type {
   Choice,
   LessonItem,
@@ -473,27 +475,46 @@ function KidChrome({
 }) {
   const t = themeOf(themeId);
   const hold = useRef<number | null>(null);
+  const [holding, setHolding] = useState(false);
+
+  const startHold = () => {
+    if (!onEnough) return;
+    setHolding(true);
+    hold.current = window.setTimeout(onEnough, 1600);
+  };
+  const endHold = () => {
+    setHolding(false);
+    if (hold.current) window.clearTimeout(hold.current);
+    hold.current = null;
+  };
+
   return (
-    <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="display text-center text-2xl leading-tight">
+          {kidName}
+          <span className="mt-1 block text-sm font-bold opacity-80">{sitting ?? t.host}</span>
+        </p>
+        <p className="rounded-full bg-white/20 px-4 py-2 text-xl font-black">⭐ {stars}</p>
+      </div>
       <button
         type="button"
-        className="host-float text-5xl"
-        aria-label={sitting ?? t.host}
-        onPointerDown={() => {
-          if (!onEnough) return;
-          hold.current = window.setTimeout(onEnough, 1600);
-        }}
-        onPointerUp={() => {
-          if (hold.current) window.clearTimeout(hold.current);
-        }}
+        className="fat-card mt-3 flex min-h-28 w-full flex-col items-center justify-center p-4 text-center"
+        aria-label={`${sitting ?? t.host}. Hold for that's enough.`}
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onContextMenu={(e) => e.preventDefault()}
       >
-        {hostEmoji ?? t.hostEmoji}
+        <span className="flex items-center gap-3">
+          <span className="host-float text-5xl">{hostEmoji ?? t.hostEmoji}</span>
+          <span className="display text-2xl leading-tight">Hold for that&apos;s enough.</span>
+        </span>
+        <span className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stone-200">
+          <span className={`block h-full bg-stone-900 ${holding ? "hold-fill" : "w-0"}`} />
+        </span>
       </button>
-      <p className="display text-center text-2xl leading-tight">
-        {kidName}
-        <span className="mt-1 block text-sm font-bold opacity-80">{sitting ?? t.host}</span>
-      </p>
-      <p className="rounded-full bg-white/20 px-4 py-2 text-xl font-black">⭐ {stars}</p>
     </div>
   );
 }
@@ -523,13 +544,16 @@ export function DailySession({
   const [shaken, setShaken] = useState<string>();
   const [wins, setWins] = useState(0);
   const start = useRef(Date.now());
+  const usedIds = useRef<Set<string>>(new Set());
   const item = queue[i];
 
   useEffect(() => {
     if (!module) return;
     const base = module.items;
     if (mode === "scout") {
-      setQueue(child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1);
+      const scout = child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
+      usedIds.current = new Set(scout.map((it) => it.id));
+      setQueue(scout);
     } else {
       const taps = base.filter((it) => it.kind === "tap");
       const drags = base.filter((it) => it.kind === "drag");
@@ -538,8 +562,12 @@ export function DailySession({
       const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
       const rest = base.filter((it) => !used.has(it.id));
       const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean);
-      const n = mode === "try" ? lead.length : child?.sessionLength === "shorter" ? 5 : child?.sessionLength === "longer" ? 9 : 7;
-      setQueue(lead.slice(0, n));
+      const width = typeof window !== "undefined" ? window.innerWidth : 1024;
+      const session = tripSessionLength(child?.sessionLength ?? "standard", width);
+      const n = mode === "try" ? lead.length : session === "shorter" ? 5 : session === "longer" ? 9 : 7;
+      const next = lead.slice(0, n);
+      usedIds.current = new Set(next.map((it) => it.id));
+      setQueue(next);
     }
   }, [module, mode, child?.sessionLength, child?.track]);
 
@@ -660,6 +688,21 @@ export function DailySession({
         setVersion(0);
         setI((n) => Math.min(n + 1, queue.length - 1));
         if (i + 1 >= queue.length) router.push(`/kids/${kidId}/done?kind=${mode}&module=${module.id}`);
+      } else if (version + 1 >= 2) {
+        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : module.items;
+        const alt = nextSameSkill(bank, item, usedIds.current);
+        if (alt) {
+          usedIds.current.add(alt.id);
+          setQueue((q) => {
+            const copy = [...q];
+            copy[i] = alt;
+            return copy;
+          });
+          setVersion(0);
+          setBanner(null);
+        } else {
+          setVersion((v) => v + 1);
+        }
       } else {
         setVersion((v) => v + 1);
       }
