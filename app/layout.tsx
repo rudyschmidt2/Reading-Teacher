@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fredoka, Nunito } from "next/font/google";
 import { PwaRegister } from "@/components/Pwa";
+import { RefreshBar } from "@/components/RefreshBar";
 import { HouseProvider } from "@/lib/store";
 import "./globals.css";
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <HouseProvider>
           <PwaRegister />
           {children}
+          <RefreshBar />
         </HouseProvider>
       </body>
     </html>

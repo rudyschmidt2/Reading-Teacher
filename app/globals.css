@@ -16,6 +16,8 @@
   --accent2: #a78bfa;
   --card: #f5f3ff;
   --glow: color-mix(in srgb, var(--accent) 55%, transparent);
+  /* Height of the fixed refresh bar; pages and the play dock sit above it. */
+  --refresh-bar: 2.25rem;
 }
 
 @property --p {
@@ -146,7 +148,7 @@
     background: linear-gradient(165deg, var(--bg1), var(--bg2));
     overflow-x: clip;
     border-top: env(safe-area-inset-top, 0px) solid transparent;
-    border-bottom: env(safe-area-inset-bottom, 0px) solid transparent;
+    border-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--refresh-bar)) solid transparent;
   }
 
   .kid-stage::before,
@@ -425,9 +427,9 @@
 
   .play-dock {
     position: fixed;
-    inset: auto 0 0;
+    inset: auto 0 calc(var(--refresh-bar) + env(safe-area-inset-bottom, 0px));
     z-index: 40;
-    padding: 0.7rem 0.7rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.7rem;
     background: linear-gradient(to top, rgb(8 6 24 / 0.82), rgb(8 6 24 / 0.35) 70%, transparent);
   }
 
@@ -464,6 +466,68 @@
     padding: 0.7rem 0.85rem;
     background: rgb(27 20 64 / 0.78);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+
+  /* Fixed strip under everything: build stamp + hard refresh. Lets the
+     installed (standalone) app reload without being closed. */
+  .refresh-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    height: calc(var(--refresh-bar) + env(safe-area-inset-bottom, 0px));
+    padding: 0 0.75rem env(safe-area-inset-bottom, 0px);
+    background: rgb(6 8 21 / 0.92);
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+    color: rgb(255 255 255 / 0.55);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .refresh-bar--fresh {
+    color: #fde68a;
+    border-top-color: rgb(251 191 36 / 0.45);
+  }
+
+  .refresh-bar__stamp {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .refresh-bar__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    height: 1.6rem;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.12);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 900;
+    transition: background 0.15s;
+  }
+
+  .refresh-bar__button:hover {
+    background: rgb(255 255 255 / 0.2);
+  }
+
+  .refresh-bar__button:disabled {
+    opacity: 0.6;
+  }
+
+  .refresh-bar--fresh .refresh-bar__button {
+    background: var(--accent, #fbbf24);
+    color: var(--ink);
   }
 
   .star-pill {
@@ -824,7 +888,7 @@
     min-height: 100dvh;
     color: #e5e7eb;
     border-top: env(safe-area-inset-top, 0px) solid transparent;
-    border-bottom: env(safe-area-inset-bottom, 0px) solid transparent;
+    border-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--refresh-bar)) solid transparent;
     background:
       radial-gradient(
         60% 40% at 0% 0%,
