@@ -63,9 +63,15 @@ export function sittingHost(themeId: ThemeId | undefined, seed: string) {
   return null;
 }
 
+/** Honest miss once. Theme lines already say it; do not append again. */
+export function honestMissLine(line: string) {
+  const base = line.replace(/\s*Not that one\.?/gi, "").trim().replace(/[.!]+$/, "");
+  return `${base}. Not that one.`;
+}
+
 export function skinMiss(themeId: ThemeId | undefined, fallback: string, seed: string) {
   const host = sittingHost(themeId, seed);
-  return host?.miss ?? fallback;
+  return honestMissLine(host?.miss ?? fallback);
 }
 
 export function skinWin(themeId: ThemeId | undefined, fallback: string, seed: string) {
