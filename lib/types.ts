@@ -98,6 +98,9 @@ export type Child = {
   sessionLength: SessionLength;
   readyForPrintWords: boolean;
   parentUnlockedWords: boolean;
+  dailySessions: number;
+  lastDailyDate?: string;
+  lastScoutDate?: string;
 };
 
 export type Attempt = {

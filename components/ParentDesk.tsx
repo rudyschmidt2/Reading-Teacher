@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey } from "@/lib/grades";
+import { scoutDueReason } from "@/lib/scout";
 import { useHouse } from "@/lib/store";
 import type { Child, ModuleVerdict, Stretch } from "@/lib/types";
 
@@ -408,38 +409,45 @@ function LastSession({ childId }: { childId: string }) {
 
 function ScoutCard({ kidId }: { kidId: string }) {
   const house = useHouse();
+  const child = house.kid(kidId);
   const report = [...house.state.scouts].reverse().find((s) => s.kidId === kidId);
-  if (!report) return null;
+  const dueLine = child ? scoutDueReason(child) : null;
+  if (!report && !dueLine) return null;
   return (
     <div className="rounded-2xl bg-white p-4">
       <h3 className="font-black">Scout map — daily does not auto-change</h3>
-      <p className="text-sm">
-        Pack {report.pack} · ceiling {report.ceiling} · floor {report.floor} · {report.status}
-      </p>
-      <ul className="mt-2 text-sm">
-        {report.bands.map((b) => (
-          <li key={b.name}>
-            {b.name}: {b.tag}
-          </li>
-        ))}
-      </ul>
-      {report.drafts.map((d) => (
-        <p key={d.title} className="text-sm">
-          Draft: {d.title} — {d.skill} ({d.stretch})
-        </p>
-      ))}
-      {report.status === "pending" ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="rounded-full bg-stone-900 px-3 py-1 text-white" onClick={() => house.resolveScout(kidId, "approved")}>
-            Approve drafts
-          </button>
-          <button type="button" className="rounded-full bg-white px-3 py-1" onClick={() => house.resolveScout(kidId, "approved", true)}>
-            Ease drafts
-          </button>
-          <button type="button" className="rounded-full bg-white px-3 py-1" onClick={() => house.resolveScout(kidId, "ignored")}>
-            Ignore
-          </button>
-        </div>
+      {dueLine ? <p className="text-sm">{dueLine}</p> : null}
+      {report ? (
+        <>
+          <p className="text-sm">
+            Pack {report.pack} · ceiling {report.ceiling} · floor {report.floor} · {report.status}
+          </p>
+          <ul className="mt-2 text-sm">
+            {report.bands.map((b) => (
+              <li key={b.name}>
+                {b.name}: {b.tag}
+              </li>
+            ))}
+          </ul>
+          {report.drafts.map((d) => (
+            <p key={d.title} className="text-sm">
+              Draft: {d.title} — {d.skill} ({d.stretch})
+            </p>
+          ))}
+          {report.status === "pending" ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="rounded-full bg-stone-900 px-3 py-1 text-white" onClick={() => house.resolveScout(kidId, "approved")}>
+                Approve drafts
+              </button>
+              <button type="button" className="rounded-full bg-white px-3 py-1" onClick={() => house.resolveScout(kidId, "approved", true)}>
+                Ease drafts
+              </button>
+              <button type="button" className="rounded-full bg-white px-3 py-1" onClick={() => house.resolveScout(kidId, "ignored")}>
+                Ignore
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
