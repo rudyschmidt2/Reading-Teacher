@@ -17,12 +17,12 @@ import {
   themeOf,
   wordsUnlocked,
 } from "@/lib/catalog";
+import { scorePlacement, struggleStop, type PlacementRow } from "@/lib/placement";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
 import { useHouse } from "@/lib/store";
 import type {
   Choice,
-  GradeDimension,
   LessonItem,
   PlacementItem,
   PlayKind,
@@ -73,7 +73,8 @@ function TileChip({
     return (
       <button type="button" onClick={onPick} className="fat-card flex min-h-28 min-w-28 flex-col items-center justify-center p-3">
         <VowelFace vowel={tile.vowel} />
-        <span className="mt-1 text-sm font-bold opacity-70">{VOWEL_FACE[tile.vowel].sound}</span>
+        {tile.label.length > 1 ? <span className="text-3xl font-black">{tile.label.slice(1)}</span> : null}
+        <span className="mt-1 text-sm font-bold opacity-70">{tile.label.length > 1 ? tile.label : VOWEL_FACE[tile.vowel].sound}</span>
       </button>
     );
   }
@@ -336,13 +337,14 @@ export function PlacementSession({ kidId }: { kidId: string }) {
   }, [isMyles]);
 
   const [i, setI] = useState(0);
-  const [results, setResults] = useState<{ id: string; rung: string; ok: boolean; dim: GradeDimension }[]>([]);
+  const [results, setResults] = useState<PlacementRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [party, setParty] = useState(false);
   const [shaken, setShaken] = useState<string>();
   const [locked, setLocked] = useState(false);
   const retries = useRef(0);
   const start = useRef(Date.now());
+  const history = useRef<PlacementRow[]>([]);
   const item = plan[i];
 
   useEffect(() => {
@@ -357,65 +359,10 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     return null;
   }
 
-  const finish = (extra: typeof results) => {
-    const all = extra;
-    let grade: "S" | "L" | "C" | "C+" | "A0" | "A1" | "A2" | "A3" = "S";
-    let note = "";
-    let kidLine = `You found a star with ${theme.host}!`;
-    let owned: string[] = [];
-    if (isMyles) {
-      const names = all.filter((r) => r.rung === "names");
-      const sounds = all.filter((r) => r.rung === "letter-sounds");
-      const nHit = names.filter((r) => r.ok).length;
-      const sHit = sounds.filter((r) => r.ok).length;
-      const total = all.filter((r) => r.ok).length;
-      if (total <= 2) grade = "A0";
-      else if (nHit >= 3 && sHit <= 2) grade = "A1";
-      else if (sHit >= 3 && nHit <= 2) grade = "A2";
-      else grade = "A3";
-      owned = all.filter((r) => r.ok).map((r) => r.id);
-      note = `Names ${nHit}/4, sounds ${sHit}/${Math.max(sounds.length, 1)}. Stay in letters and sounds.`;
-      kidLine = `You beamed up a letter!`;
-    } else {
-      const rungOf = (rung: string) => all.filter((r) => r.rung === rung);
-      const pass = (rung: string, need: number, burst: number) => {
-        const rows = rungOf(rung);
-        const hits = rows.filter((r) => r.ok).length;
-        const last2 = rows.slice(-2);
-        const twoMiss = last2.length === 2 && last2.every((r) => !r.ok);
-        return hits >= need && !twoMiss && rows.length >= burst;
-      };
-      const soundsPass = pass("sounds", 3, 4);
-      const lettersPass = pass("letters", 4, 6);
-      const cvcPass = pass("cvc", 3, 4);
-      if (!soundsPass) {
-        grade = "S";
-        note = "Stopped on sounds. First-sound play, no print.";
-      } else if (!lettersPass) {
-        grade = "L";
-        note = "Passed sounds, stopped on letters.";
-      } else if (!cvcPass) {
-        grade = "C";
-        note = "Passed letters, stopped on CVC.";
-      } else {
-        grade = "C+";
-        note = "Passed CVC. Short CVC lessons next.";
-      }
-      owned = all.filter((r) => r.ok).map((r) => r.id).slice(0, 4);
-      kidLine = grade === "S" ? "You found the snake!" : "You flew through a letter!";
-    }
-    house.finishPlacement(child.id, grade, note, kidLine, owned);
+  const finish = (extra: PlacementRow[]) => {
+    const scored = scorePlacement(extra, isMyles ? "letters" : "words");
+    house.finishPlacement(child.id, scored.grade, scored.note, scored.kidLine, scored.owned);
     router.push(`/kids/${kidId}/done?kind=place`);
-  };
-
-  const struggle = (next: typeof results, rung: string) => {
-    const rows = next.filter((r) => r.rung === rung);
-    const last2 = rows.slice(-2);
-    if (last2.length === 2 && last2.every((r) => !r.ok)) return true;
-    if (rung === "sounds" && rows.length >= 4 && rows.filter((r) => r.ok).length < 2) return true;
-    if (rung === "letters" && rows.length >= 4 && rows.filter((r) => r.ok).length < 2) return true;
-    if (rung === "cvc" && rows.length >= 4 && rows.filter((r) => r.ok).length < 2) return true;
-    return false;
   };
 
   const host = sittingHost(theme.id, `${kidId}-${today()}`);
@@ -423,8 +370,10 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     if (!item || locked) return;
     const ok = choiceId === paintCorrectId(item, theme.id);
     setLocked(true);
-    const row = { id: item.id, rung: item.rung, ok, dim: item.dimension };
-    const next = [...results, row];
+    const row: PlacementRow = { id: item.id, rung: item.rung, ok, dim: item.dimension };
+    const next = [...history.current, row];
+    history.current = next;
+    setResults(next);
     house.recordAttempt({
       kidId: child.id,
       moduleId: "placement",
@@ -461,7 +410,7 @@ export function PlacementSession({ kidId }: { kidId: string }) {
         else setI(i + 1);
         return;
       }
-      if (struggle(next, item.rung)) {
+      if (struggleStop(next, item.rung)) {
         finish(next);
         return;
       }

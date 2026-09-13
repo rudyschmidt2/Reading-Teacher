@@ -48,6 +48,34 @@ function dragWord(id: string, word: string, tiles: string[], vowel: Vowel, speak
   };
 }
 
+function rTeam(team: "ar" | "or" | "er" | "ir" | "ur") {
+  const vowel = team[0] as Vowel;
+  return { id: `v-${team}`, kind: "vowel" as const, label: team, vowel, phoneme: `/${team}/` };
+}
+
+function dragChunks(id: string, word: string, chunks: string[], foils: string[], prompt?: string): LessonItem {
+  const rSet = new Set(["ar", "or", "er", "ir", "ur"]);
+  const tiles = [...chunks, ...foils].map((t) =>
+    rSet.has(t) ? rTeam(t as "ar" | "or" | "er") : { id: `l-${t}`, kind: "letter" as const, label: t },
+  );
+  return {
+    id,
+    kind: "drag",
+    widget: "drag",
+    prompt: prompt ?? `Build ${chunks.join("-")}. Two stalls.`,
+    dimension: "words",
+    word,
+    speakTarget: word,
+    tiles,
+    slots: chunks.map((ch, i) => ({
+      id: `${id}-s${i}`,
+      accepts: rSet.has(ch) ? (["vowel"] as const) : (["letter"] as const),
+      correctTileId: rSet.has(ch) ? `v-${ch}` : `l-${ch}`,
+      glowVowel: rSet.has(ch) ? (ch[0] as Vowel) : undefined,
+    })),
+  };
+}
+
 function dragHold(id: string, prompt: string, tiles: string[], hit: string, dimension: GradeDimension): LessonItem {
   const vowelSet = new Set(["a", "e", "i", "o", "u"]);
   return {
@@ -283,9 +311,10 @@ export const BANK_MODULES: ModuleDef[] = [
     dimensions: ["words", "vowelPhonics", "speaking"],
     items: [
       tap("RCTL-01", "What word?", [{ id: "car", label: "car" }, { id: "cat", label: "cat" }, { id: "can", label: "can" }], "car", "words", { word: "car" }),
+      dragChunks("RCTL-01d", "car", ["c", "ar"], ["or", "t"], "Build c-ar. The r sits on the vowel face."),
       tap("RCTL-02", "What word?", [{ id: "for", label: "for" }, { id: "far", label: "far" }, { id: "fur", label: "fur" }], "for", "words"),
+      dragChunks("RCTL-02d", "for", ["f", "or"], ["ar", "er"], "Build f-or. Two bays."),
       tap("RCTL-03", "What word?", [{ id: "her", label: "her" }, { id: "hat", label: "hat" }, { id: "hit", label: "hit" }], "her", "words"),
-      dragWord("RCTL-01d", "car", ["c", "ar", "t"], "a", "car", ["c", "ar"]),
       speakItem("RCTL-04", "Say car.", "car", "speaking", { word: "car" }),
     ],
   },
@@ -298,9 +327,10 @@ export const BANK_MODULES: ModuleDef[] = [
     dimensions: ["words", "speaking"],
     items: [
       tap("SYL-01", "Clap, then read.", [{ id: "napkin", label: "nap-kin" }, { id: "nap", label: "nap" }, { id: "kin", label: "kin" }], "napkin", "words", { word: "napkin" }),
+      dragChunks("SYL-01d", "napkin", ["nap", "kin"], ["sun", "set"], "Clap nap-kin. Two garage stalls."),
       tap("SYL-02", "Clap, then read.", [{ id: "basket", label: "bas-ket" }, { id: "bat", label: "bat" }, { id: "sit", label: "sit" }], "basket", "words"),
+      dragChunks("SYL-02d", "basket", ["bas", "ket"], ["nap", "sun"], "Clap bas-ket. Two garage stalls."),
       tap("SYL-03", "Clap, then read.", [{ id: "sunset", label: "sun-set" }, { id: "sun", label: "sun" }, { id: "set", label: "set" }], "sunset", "words"),
-      dragHold("SYL-01d", "Park the first chunk: nap.", ["nap", "kin", "sun"], "nap", "words"),
       speakItem("SYL-04", "Say napkin.", "napkin", "speaking", { word: "napkin" }),
     ],
   },

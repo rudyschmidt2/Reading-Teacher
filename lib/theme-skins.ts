@@ -96,11 +96,16 @@ export function paintCorrectId(item: LessonItem | PlacementItem, themeId?: Theme
 }
 
 export function trayHint(themeId: ThemeId | undefined, slotCount: number) {
-  if (isFarming(themeId)) return farmingTrayHint(slotCount);
-  if (isRace(themeId)) {
-    return slotCount <= 1
-      ? "One pit slot. Park the letter or sound. No word bays."
-      : "Three pit bays. Tap a tile to send it.";
+  if (isFarming(themeId)) {
+    if (slotCount <= 1) return farmingTrayHint(slotCount);
+    if (slotCount === 2) return "Two stalls: hitch and wagon. Tap a tile to send it.";
+    return farmingTrayHint(slotCount);
   }
+  if (isRace(themeId)) {
+    if (slotCount <= 1) return "One pit slot. Park the letter or sound. No word bays.";
+    if (slotCount === 2) return "Two garage stalls. Tap a tile to send it.";
+    return "Three pit bays. Tap a tile to send it.";
+  }
+  if (slotCount === 2) return "Two stalls. Tap a tile to send it.";
   return "Tap a fat tile to send it. Same as a drag.";
 }
