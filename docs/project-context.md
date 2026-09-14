@@ -31,7 +31,7 @@ Rudy (parent) enters ages/birthdays and can try, reorder, ease, harden, or autho
 - Honest miss: they must know it wasn’t right. Line is **“Not that one.”** Wobble. Tile hops home. No fake win. Stars only on real hits. Then try another version of the same word/skill until a real hit.
 - Parent desk: real grades, known-vs-unknown map, pass/fail, last session, Try / Ease / Harden / Hold, create/reorder modules.
 - Parent grade gambit: letter recognition, vowel phonics, phonemes, words, sentences, spoken words, speed, module pass/fail.
-- Parent door on the home screen is **hold-to-open**. Host hold during play is **that’s enough**.
+- Parent door on the landing page and the kid picker is **hold-to-open**. The picker has a **Grades** hold at the bottom so Rudy can reach the desk from the same screen the kids tap. Host hold during play is **that’s enough**.
 
 ## Play
 
