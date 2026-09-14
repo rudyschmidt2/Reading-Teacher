@@ -1,14 +1,14 @@
 import type { GradeDimension, LessonItem, ModuleDef, PlacementItem, Vowel } from "./types";
 
-function letterChoices(letters: string[]) {
+export function letterChoices(letters: string[]) {
   return letters.map((l) => ({ id: l, label: l }));
 }
 
-function pics(rows: [string, string, string][]) {
+export function pics(rows: [string, string, string][]) {
   return rows.map(([id, label, emoji]) => ({ id, label, emoji }));
 }
 
-function tap(
+export function tap(
   id: string,
   prompt: string,
   choices: { id: string; label: string; emoji?: string }[],
@@ -19,11 +19,11 @@ function tap(
   return { id, kind: "tap", widget: extra.widget ?? "smash", prompt, dimension, choices, correctId: hit, ...extra };
 }
 
-function speakItem(id: string, prompt: string, target: string, dimension: GradeDimension, extra: Partial<LessonItem> = {}): LessonItem {
+export function speakItem(id: string, prompt: string, target: string, dimension: GradeDimension, extra: Partial<LessonItem> = {}): LessonItem {
   return { id, kind: "speak", widget: "say", prompt, dimension, speakTarget: target, ...extra };
 }
 
-function dragWord(id: string, word: string, tiles: string[], vowel: Vowel, speak: string, parts?: string[]): LessonItem {
+export function dragWord(id: string, word: string, tiles: string[], vowel: Vowel, speak: string, parts?: string[]): LessonItem {
   const letters = parts ?? word.replace(/[^a-z]/g, "").split("");
   const vowelSet = new Set(["a", "e", "i", "o", "u"]);
   return {
@@ -53,7 +53,7 @@ function rTeam(team: "ar" | "or" | "er" | "ir" | "ur") {
   return { id: `v-${team}`, kind: "vowel" as const, label: team, vowel, phoneme: `/${team}/` };
 }
 
-function dragChunks(id: string, word: string, chunks: string[], foils: string[], prompt?: string): LessonItem {
+export function dragChunks(id: string, word: string, chunks: string[], foils: string[], prompt?: string): LessonItem {
   const rSet = new Set(["ar", "or", "er", "ir", "ur"]);
   const tiles = [...chunks, ...foils].map((t) =>
     rSet.has(t) ? rTeam(t as "ar" | "or" | "er") : { id: `l-${t}`, kind: "letter" as const, label: t },
@@ -76,7 +76,7 @@ function dragChunks(id: string, word: string, chunks: string[], foils: string[],
   };
 }
 
-function dragHold(id: string, prompt: string, tiles: string[], hit: string, dimension: GradeDimension): LessonItem {
+export function dragHold(id: string, prompt: string, tiles: string[], hit: string, dimension: GradeDimension): LessonItem {
   const vowelSet = new Set(["a", "e", "i", "o", "u"]);
   return {
     id,

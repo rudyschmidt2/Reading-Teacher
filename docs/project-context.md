@@ -17,8 +17,11 @@ Rudy (parent) enters ages/birthdays and can try, reorder, ease, harden, or autho
 
 - Phonics-heavy. Default stretch is **stretch-hard**.
 - Riley/Hudson ladder: SATPIN → CVC → digraphs/blends → heart words → silent-e / teams / r-controlled / syllables / endings → short sentences.
-- Placement Track A (Riley/Hudson): sounds → letters → CVC. Stop on 2 misses in a row or a failed 4-item burst. Parent shelves: **S / L / C / C+**.
-- Placement Track B (Myles): 8 letters max, names then sounds, 3 tiles. Shelves: **A0–A3**.
+- **Skills map before the first daily.** Every active child takes the detailed diagnostic (`lib/diagnostic.ts`) before any daily session. It is tap-only, in the kid's skin, resumable across sittings (20 probes per sitting, "that's enough" saves), and the kid never hears "test" — it is a map to scout.
+- Map Track A (Riley/Hudson): 14 bands up the ladder — first sounds → letter names → letter sounds → short vowels → CVC → digraphs → blends → heart words → silent-e → vowel teams → r-controlled → syllables → endings → sentences. One bit per probe (a letter, a vowel, *sh*, *made*…). A band stops on 2 misses in a row or fewer than 2 hits in 4. An unknown band ends the map; two shaky bands in a row end it too. Legacy shelves **S / L / C / C+** are derived from the frontier.
+- Map Track B (Myles): 8 letters, names then sounds then first sounds, 3 tiles. Shelves **A0–A3**.
+- **The path is built from the map, per bit.** Known band → its bank module is marked passed. Shaky band → a targeted module from exactly the missed bits (plus one review item), then the bank module. Unknown band (frontier) → bank module, then a targeted module on the whole band, then one stretch band. Nothing past that is auto-assigned; Rudy adds from the shelf.
+- Parent desk shows the **Skills map**: every band known / shaky / unknown / not reached with the bits, what was built and why, and *Map again*.
 - Periodic **scout** probes (weekly / every 5 dailies). Never cold-open the day with a scout. Kid sees a secret-tunnel adventure. Parent sees a scout report. **Daily path does not auto-change.**
 - After a session, Rudy reads the real sheet and create / reorder / ease / harden from what that child actually did.
 

@@ -101,6 +101,51 @@ export type Child = {
   dailySessions: number;
   lastDailyDate?: string;
   lastScoutDate?: string;
+  diagnostic?: DiagnosticProgress;
+  diagnosticReport?: DiagnosticReport;
+};
+
+export type BandStatus = "known" | "shaky" | "unknown" | "not-reached";
+
+export type DiagnosticRow = {
+  probeId: string;
+  band: string;
+  bit: string;
+  ok: boolean;
+  ms: number;
+  at: string;
+};
+
+export type DiagnosticProgress = {
+  track: Track;
+  rows: DiagnosticRow[];
+  /** Index of the next band and probe to ask. Null once the map is finished. */
+  cursor: { band: number; probe: number } | null;
+  startedAt: string;
+  finishedAt?: string;
+};
+
+export type BandReport = {
+  id: string;
+  title: string;
+  status: BandStatus;
+  hits: number;
+  answered: number;
+  total: number;
+  known: string[];
+  missed: string[];
+};
+
+export type DiagnosticReport = {
+  track: Track;
+  at: string;
+  bands: BandReport[];
+  /** First band that is not known. Undefined when everything probed was known. */
+  frontier?: string;
+  shelf: PlacementShelf;
+  note: string;
+  kidLine: string;
+  built: { moduleId: string; title: string; why: string }[];
 };
 
 export type Attempt = {
@@ -142,7 +187,7 @@ export type HouseState = {
 
 export type PlacementItem = {
   id: string;
-  rung: "sounds" | "letters" | "cvc" | "names" | "letter-sounds";
+  rung: string;
   widget: Widget;
   prompt: string;
   parentHint?: string;

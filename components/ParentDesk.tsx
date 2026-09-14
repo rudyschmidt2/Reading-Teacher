@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceLastError, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
+import { bandReports, bandsFor, progressSummary } from "@/lib/diagnostic";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey, type DimensionStatus } from "@/lib/grades";
 import { scoutDueReason } from "@/lib/scout";
 import { useHouse } from "@/lib/store";
-import type { Child, ModuleVerdict, Stretch } from "@/lib/types";
+import type { BandStatus, Child, ModuleVerdict, Stretch } from "@/lib/types";
 import {
   ArrowLeftIcon,
   BoltIcon,
@@ -280,7 +281,9 @@ export function ChildDesk({ child }: { child: Child }) {
                 </div>
                 <div className="flex gap-2">
                   <dt className="text-slate-500">Placement shelf</dt>
-                  <dd className="font-bold text-white">{child.status === "waiting" ? "none — waiting" : child.placementGrade ?? "not taken"}</dd>
+                  <dd className="font-bold text-white">
+                    {child.status === "waiting" ? "none — waiting" : child.placementGrade ?? (child.diagnostic ? "map in progress" : "map not taken")}
+                  </dd>
                 </div>
               </dl>
               {child.placementNote ? <p className="mt-2 text-sm text-slate-400">{child.placementNote}</p> : null}
@@ -362,6 +365,7 @@ export function ChildDesk({ child }: { child: Child }) {
             </div>
           </Card>
 
+          <SkillsMapCard child={child} />
           <LastSession childId={child.id} />
           <ScoutCard kidId={child.id} />
           <PathEditor child={child} />
@@ -638,6 +642,103 @@ function CreateModule({ child }: { child: Child }) {
         Create and put on path
       </button>
     </form>
+  );
+}
+
+function bandBadge(status: BandStatus) {
+  if (status === "known") return "badge badge--good";
+  if (status === "shaky") return "badge badge--warn";
+  if (status === "unknown") return "badge badge--bad";
+  return "badge badge--muted";
+}
+
+function SkillsMapCard({ child }: { child: Child }) {
+  const house = useHouse();
+  const report = child.diagnosticReport;
+  const progress = child.diagnostic;
+  const bands = report ? report.bands : progress ? bandReports(progress) : bandsFor(child.track).map((b) => ({ id: b.id, title: b.title, status: "not-reached" as BandStatus, hits: 0, answered: 0, total: b.probes.length, known: [], missed: [] }));
+  const summary = progress ? progressSummary(progress) : undefined;
+  const state = report ? "done" : progress ? "running" : "fresh";
+  const sub =
+    state === "done"
+      ? `Finished ${report?.at.slice(0, 10)}. Path below was built from this map.`
+      : state === "running"
+        ? `In progress: ${summary?.answered} probes answered, on ${summary?.bandTitle ?? "the next band"}. Resumes at the next theme pick.`
+        : "Not started. The kid gets it before the first daily session. Tap-only, in their skin, stops at the frontier.";
+
+  return (
+    <Card title="Skills map" icon={<CompassIcon size={18} />} sub={sub}>
+      {report ? <p className="mb-3 text-sm text-slate-300">{report.note}</p> : null}
+      <ul className="grid gap-2 md:grid-cols-2">
+        {bands.map((b) => (
+          <li key={b.id} className="desk-tile p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-bold text-white">{b.title}</p>
+              <span className={bandBadge(b.status)}>{b.status.replace("-", " ")}</span>
+            </div>
+            {b.answered > 0 ? (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="stat-bar flex-1">
+                  <span style={{ width: `${Math.round((b.hits / b.total) * 100)}%` }} />
+                </span>
+                <span className="text-xs font-bold text-slate-400">
+                  {b.hits}/{b.answered}
+                  {b.answered < b.total ? ` of ${b.total}` : ""}
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-slate-500">{b.total} probes</p>
+            )}
+            {b.missed.length || b.known.length ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {b.missed.map((bit, i) => (
+                  <span key={`m-${bit}-${i}`} className="badge badge--bad">
+                    {bit}
+                  </span>
+                ))}
+                {b.known.map((bit, i) => (
+                  <span key={`k-${bit}-${i}`} className="badge badge--good">
+                    {bit}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {report?.built.length ? (
+        <div className="mt-4">
+          <p className="text-sm font-bold text-white">Built for {child.name}</p>
+          <ul className="mt-1 space-y-1 text-sm text-slate-300">
+            {report.built.map((b) => (
+              <li key={b.moduleId}>
+                <span className="font-bold">{b.title}</span> <span className="text-slate-500">— {b.why}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {state !== "done" ? (
+          <Link href={`/kids/${child.id}/theme`} className="chip chip--go px-4 py-2 text-sm">
+            <PlayIcon size={14} />
+            {state === "running" ? "Continue the map" : "Start the map"}
+          </Link>
+        ) : null}
+        {state !== "fresh" ? (
+          <button
+            type="button"
+            className="chip px-4 py-2 text-sm"
+            onClick={() => {
+              if (window.confirm(`Start ${child.name}'s skills map over? The path stays until the new map finishes.`)) house.restartDiagnostic(child.id);
+            }}
+          >
+            <RefreshIcon size={14} />
+            Map again
+          </button>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 

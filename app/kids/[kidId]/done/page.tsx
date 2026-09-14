@@ -32,7 +32,17 @@ export default function DonePage() {
 
   if (!ready || !child) return <Loading />;
   const line = search.get("line") ?? child.kidLine ?? theme.win;
-  const offerTunnel = kind !== "scout" && scoutDue(child);
+  const mapDone = kind === "place" && search.get("finished") === "1";
+  const eyebrow = kind === "scout" ? "Tunnel cleared" : kind === "place" ? (mapDone ? "Map complete" : "Map saved") : "Level complete";
+  const title =
+    kind === "scout"
+      ? "You finished the tunnel!"
+      : kind === "place"
+        ? mapDone
+          ? "You mapped the whole world!"
+          : "Great scouting!"
+        : "That is enough adventure!";
+  const offerTunnel = kind !== "scout" && kind !== "place" && scoutDue(child);
   return (
     <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center px-4 py-10 text-center`}>
       <div className="relative">
@@ -47,11 +57,9 @@ export default function DonePage() {
 
       <span className="glass rise-in mt-10 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.18em] text-white/85">
         <SparklesIcon size={14} className="text-amber-300" />
-        {kind === "scout" ? "Tunnel cleared" : "Level complete"}
+        {eyebrow}
       </span>
-      <h1 className="display title-pop rise-in stagger-1 mt-4 max-w-md text-5xl font-bold leading-none">
-        {kind === "scout" ? "You finished the tunnel!" : "That is enough adventure!"}
-      </h1>
+      <h1 className="display title-pop rise-in stagger-1 mt-4 max-w-md text-5xl font-bold leading-none">{title}</h1>
       <p className="rise-in stagger-2 mt-4 max-w-sm text-2xl font-bold text-white/90">{line}</p>
 
       <div className="star-pill rise-in stagger-3 mt-6 text-3xl">

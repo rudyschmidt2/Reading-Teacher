@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallHint } from "@/components/Pwa";
@@ -17,16 +17,18 @@ import {
   SCOUT_MY1,
   SCOUT_RH1,
   THEMES,
-  TRACK_A_CVC,
-  TRACK_A_LETTERS,
-  TRACK_A_SOUNDS,
-  TRACK_B_NAMES,
-  TRACK_B_SOUNDS,
   VOWEL_FACE,
   themeOf,
   wordsUnlocked,
 } from "@/lib/catalog";
-import { scorePlacement, struggleStop, type PlacementRow } from "@/lib/placement";
+import {
+  PAUSED_KID_LINE,
+  SITTING_CAP,
+  currentBand,
+  currentProbe,
+  emptyDiagnostic,
+  progressSummary,
+} from "@/lib/diagnostic";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
 import { nextSameSkill } from "@/lib/skip-stuck";
@@ -390,7 +392,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
     unlockKidMic();
     pickTheme(kidId, id);
     speak(THEMES.find((t) => t.id === id)?.label ?? "Let's play");
-    if (!child.placementGrade) router.push(`/kids/${kidId}/place`);
+    if (!child.diagnosticReport) router.push(`/kids/${kidId}/place`);
     else router.push(`/kids/${kidId}/play`);
   };
 
@@ -422,67 +424,64 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   );
 }
 
-export function PlacementSession({ kidId }: { kidId: string }) {
+export function DiagnosticSession({ kidId }: { kidId: string }) {
   const house = useHouse();
   const router = useRouter();
   const child = house.kid(kidId);
   const theme = themeOf(child?.themeToday);
-  const isMyles = child?.id === "myles" || child?.track === "letters";
 
-  const plan = useMemo(() => {
-    if (isMyles) return [...TRACK_B_NAMES, ...TRACK_B_SOUNDS];
-    return [...TRACK_A_SOUNDS, ...TRACK_A_LETTERS, ...TRACK_A_CVC];
-  }, [isMyles]);
+  const progress = child ? child.diagnostic ?? emptyDiagnostic(child.track) : undefined;
+  const probe = progress ? currentProbe(progress) : undefined;
+  const band = progress ? currentBand(progress) : undefined;
+  const summary = progress ? progressSummary(progress) : undefined;
 
-  const [i, setI] = useState(0);
-  const [results, setResults] = useState<PlacementRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [party, setParty] = useState(false);
   const [shaken, setShaken] = useState<string>();
   const [locked, setLocked] = useState(false);
-  const retries = useRef(0);
-  const start = useRef(Date.now());
-  const history = useRef<PlacementRow[]>([]);
-  const item = plan[i];
-  useLessonListen({ prompt: item?.prompt, enabled: Boolean(item) && !banner });
+  const [retry, setRetry] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const sitting = useRef(0);
+  const start = useRef(0);
+  useLessonListen({ prompt: probe?.prompt, enabled: Boolean(probe) && !banner });
 
   useEffect(() => {
-    if (item) speak(item.prompt);
+    if (probe) speak(probe.prompt);
     start.current = Date.now();
     return () => stopSpeech();
-  }, [item]);
+  }, [probe]);
 
-  if (!house.ready || !child) return <Loading />;
+  if (!house.ready || !child || !progress) return <Loading />;
   if (child.status === "waiting") return null;
   if (!child.themeToday || child.themeDate !== today()) {
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
+  if (leaving) return null;
+  if (child.diagnosticReport || !probe) {
+    router.replace(`/kids/${kidId}/play`);
+    return null;
+  }
 
-  const finish = (extra: PlacementRow[]) => {
-    const scored = scorePlacement(extra, isMyles ? "letters" : "words");
-    house.finishPlacement(child.id, scored.grade, scored.note, scored.kidLine, scored.owned);
-    router.push(
-      `/kids/${kidId}/done?kind=place&shelf=${encodeURIComponent(scored.grade)}&line=${encodeURIComponent(scored.kidLine)}`,
-    );
+  const seed = `${kidId}-${today()}`;
+  const host = sittingHost(theme.id, seed);
+  const leave = (line: string, finished: boolean) => {
+    setLeaving(true);
+    router.push(`/kids/${kidId}/done?kind=place${finished ? "&finished=1" : ""}&line=${encodeURIComponent(line)}`);
   };
 
-  const host = sittingHost(theme.id, `${kidId}-${today()}`);
   const onPick = (choiceId: string) => {
-    if (!item || locked) return;
-    const ok = choiceId === paintCorrectId(item, theme.id);
+    if (!probe || locked) return;
+    const ok = choiceId === paintCorrectId(probe, theme.id);
     setLocked(true);
-    const row: PlacementRow = { id: item.id, rung: item.rung, ok, dim: item.dimension };
-    const next = [...history.current, row];
-    history.current = next;
-    setResults(next);
+    const isRetry = retry;
     house.recordAttempt({
       kidId: child.id,
       moduleId: "placement",
-      itemId: item.id,
-      version: retries.current,
+      itemId: probe.id,
+      version: isRetry ? 1 : 0,
       kind: "tap",
-      dimension: item.dimension,
+      dimension: probe.dimension,
       correct: ok,
       ms: Date.now() - start.current,
       kidSaw: ok ? "star" : "not that one",
@@ -490,58 +489,52 @@ export function PlacementSession({ kidId }: { kidId: string }) {
     });
     if (ok) {
       setParty(true);
-      setBanner(skinWin(theme.id, theme.win, `${kidId}-${today()}`));
+      setBanner(skinWin(theme.id, theme.win, seed));
       house.addStars(child.id, 1);
     } else {
       setShaken(choiceId);
-      setBanner(skinMiss(theme.id, theme.miss, `${kidId}-${today()}`));
+      setBanner(skinMiss(theme.id, theme.miss, seed));
     }
     window.setTimeout(() => {
       setParty(false);
       setShaken(undefined);
-      if (!ok && retries.current === 0) {
-        retries.current = 1;
+      // One honest retry for morale; only the first answer counts on the map.
+      if (!ok && !isRetry) {
+        setRetry(true);
         setLocked(false);
         return;
       }
       setBanner(null);
-      retries.current = 0;
       setLocked(false);
-      if (isMyles) {
-        const hits = next.filter((r) => r.ok).length;
-        const fussy = next.length >= 6 && (hits < 4 || struggleStop(next, item.rung));
-        if (i + 1 >= plan.length || fussy) finish(next);
-        else setI(i + 1);
+      setRetry(false);
+      sitting.current += 1;
+      const firstAnswerOk = ok && !isRetry;
+      const result = house.answerDiagnostic(child.id, probe, firstAnswerOk, Date.now() - start.current);
+      if (result.finished && result.report) {
+        leave(result.report.kidLine, true);
         return;
       }
-      if (struggleStop(next, item.rung)) {
-        finish(next);
-        return;
-      }
-      const lastOfRung =
-        (item.rung === "sounds" && item.id === "S4") ||
-        (item.rung === "letters" && item.id === "L6") ||
-        (item.rung === "cvc" && item.id === "C4");
-      if (lastOfRung && item.rung === "cvc") finish(next);
-      else setI(i + 1);
+      if (sitting.current >= SITTING_CAP) leave(PAUSED_KID_LINE, false);
     }, ok ? 1100 : 1600);
   };
 
-  if (!item) return null;
-  const lesson = asLesson(item);
-  lesson.choices = paintChoices(item, theme.id);
-  lesson.correctId = paintCorrectId(item, theme.id);
+  const lesson = asLesson(probe);
+  lesson.choices = paintChoices(probe, theme.id);
+  lesson.correctId = paintCorrectId(probe, theme.id);
 
   return (
     <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} onPointerDown={unlockKidMic}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
-      <Dots total={plan.length} current={i} />
-      <PromptCard eyebrow="Warm-up" prompt={lesson.prompt} kind="tap" widget={lesson.widget} />
+      <Dots total={band?.probes.length ?? 0} current={progress.cursor?.probe ?? 0} />
+      <p className="mt-2 text-center text-xs font-extrabold uppercase tracking-[0.18em] text-white/60">
+        Map {summary ? summary.bandIndex + 1 : 1} of {summary?.bandCount ?? 1}
+      </p>
+      <PromptCard eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind="tap" widget={lesson.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
-        <ChoiceGrid key={item.id} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
+        <ChoiceGrid key={`${probe.id}-${retry ? 1 : 0}`} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
       </div>
-      <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => router.push(`/kids/${kidId}/done?kind=place`)} />
+      <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => leave(PAUSED_KID_LINE, false)} />
     </main>
   );
 }
@@ -714,7 +707,7 @@ export function DailySession({
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
-  if (!child.placementGrade && mode === "daily") {
+  if (!child.diagnosticReport && mode === "daily") {
     router.replace(`/kids/${kidId}/place`);
     return null;
   }
