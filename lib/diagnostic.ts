@@ -1,4 +1,4 @@
-import { dragChunks, dragHold, dragWord, letterChoices, pics, speakItem, tap } from "./banks";
+import { dragChunks, dragHold, dragWord, letterChoices, pics, speakItem, tap } from "./banks.ts";
 import type {
   BandReport,
   BandStatus,
