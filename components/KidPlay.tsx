@@ -55,6 +55,7 @@ import {
   MicIcon,
   SparklesIcon,
   HomeIcon,
+  ShieldIcon,
   SpeakerIcon,
   StarIcon,
   TelescopeIcon,
@@ -903,9 +904,25 @@ const KID_GRADIENTS: [string, string][] = [
 
 export function KidPicker() {
   const { state, ready } = useHouse();
+  const router = useRouter();
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  const startHold = () => {
+    setHolding(true);
+    timer.current = window.setTimeout(() => {
+      router.push("/parent");
+    }, 1600);
+  };
+  const endHold = () => {
+    setHolding(false);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+
   if (!ready) return <Loading />;
   return (
-    <main className="kid-stage theme-planets-space px-4 py-8">
+    <main className="kid-stage theme-planets-space px-4 py-8 pb-40">
       <StageHeading eyebrow="Player select" title="Who's reading?" sub="Tap a face. Stars, not grades." />
       <InstallHint />
       <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4">
@@ -947,6 +964,33 @@ export function KidPicker() {
           );
         })}
       </div>
+      <nav className="grades-dock" aria-label="Parent grades">
+        <button
+          type="button"
+          className="grades-dock__hold"
+          aria-label="Hold to open the grades page."
+          onPointerDown={startHold}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <span className={`hold-ring relative grid h-12 w-12 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}>
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#1b1440] text-white">
+              <ShieldIcon size={22} />
+            </span>
+          </span>
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block text-lg font-black leading-none">{holding ? "Keep holding…" : "Grades"}</span>
+            <span className="mt-1 block text-xs font-extrabold uppercase tracking-wide text-white/70">
+              {holding ? "Almost…" : "Hold to open the desk"}
+            </span>
+            <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+              <span className={`block h-full rounded-full bg-gradient-to-r from-amber-300 to-fuchsia-400 ${holding ? "hold-fill" : "w-0"}`} />
+            </span>
+          </span>
+        </button>
+      </nav>
     </main>
   );
 }
