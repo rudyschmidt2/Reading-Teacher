@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallHint } from "@/components/Pwa";
@@ -29,6 +29,7 @@ import {
   emptyDiagnostic,
   progressSummary,
 } from "@/lib/diagnostic";
+import { dealChoices, dealTiles } from "@/lib/deal";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
 import { kidNextModule } from "@/lib/grades";
 import { nextSameSkill } from "@/lib/skip-stuck";
@@ -61,10 +62,6 @@ import {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function shuffle<T>(list: T[]) {
-  return [...list].sort(() => Math.random() - 0.5);
 }
 
 const CONFETTI_COLORS = ["#fde047", "#f472b6", "#22d3ee", "#a3e635", "#fb923c", "#c084fc", "#ffffff"];
@@ -183,20 +180,29 @@ function TileChip({
 
 function ChoiceGrid({
   choices,
+  correctId,
+  seed,
+  avoidSlot,
   onPick,
   shaken,
 }: {
   choices: Choice[];
-  onPick: (id: string) => void;
+  correctId?: string;
+  /** Changes per question (and per retry) so the cards get re-dealt. */
+  seed: string;
+  /** Slot the right answer sat in last time; it will not land there again. */
+  avoidSlot?: number;
+  onPick: (id: string, correctSlot: number) => void;
   shaken?: string;
 }) {
+  const { dealt, correctSlot } = useMemo(() => dealChoices(choices, correctId, seed, avoidSlot), [choices, correctId, seed, avoidSlot]);
   return (
-    <div className={`grid gap-4 ${choices.length > 3 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
-      {choices.map((c, k) => (
+    <div className={`grid gap-4 ${dealt.length > 3 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
+      {dealt.map((c, k) => (
         <button
           key={c.id}
           type="button"
-          onClick={() => onPick(c.id)}
+          onClick={() => onPick(c.id, correctSlot)}
           className={`fat-card flex min-h-36 flex-col items-center justify-center gap-2 p-4 text-4xl font-black ${
             shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 7)}`
           }`}
@@ -288,6 +294,7 @@ function DragBoard({
   const [shake, setShake] = useState(false);
   const slots = item.slots ?? [];
   const used = new Set(Object.values(filled).map((t) => t?.id));
+  const tiles = useMemo(() => dealTiles(item.tiles ?? [], item.id), [item]);
 
   const drop = (tile: Tile) => {
     const slot = slots[focus];
@@ -331,7 +338,7 @@ function DragBoard({
         })}
       </div>
       <div className="flex flex-wrap justify-center gap-3">
-        {(item.tiles ?? []).filter((t) => !used.has(t.id)).map((tile) => (
+        {tiles.filter((t) => !used.has(t.id)).map((tile) => (
           <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
         ))}
       </div>
@@ -440,6 +447,7 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   const [shaken, setShaken] = useState<string>();
   const [locked, setLocked] = useState(false);
   const [retry, setRetry] = useState(false);
+  const [lastSlot, setLastSlot] = useState<number>();
   const [leaving, setLeaving] = useState(false);
   const sitting = useRef(0);
   const start = useRef(0);
@@ -470,10 +478,11 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
     router.push(`/kids/${kidId}/done?kind=place${finished ? "&finished=1" : ""}&line=${encodeURIComponent(line)}`);
   };
 
-  const onPick = (choiceId: string) => {
+  const onPick = (choiceId: string, correctSlot: number) => {
     if (!probe || locked) return;
     const ok = choiceId === paintCorrectId(probe, theme.id);
     setLocked(true);
+    setLastSlot(correctSlot);
     const isRetry = retry;
     house.recordAttempt({
       kidId: child.id,
@@ -532,7 +541,15 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
       <PromptCard eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind="tap" widget={lesson.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
       <div className="mx-auto mt-6 max-w-lg">
-        <ChoiceGrid key={`${probe.id}-${retry ? 1 : 0}`} choices={lesson.choices ?? []} onPick={onPick} shaken={shaken} />
+        <ChoiceGrid
+          key={`${probe.id}-${retry ? 1 : 0}`}
+          choices={lesson.choices ?? []}
+          correctId={lesson.correctId}
+          seed={`${seed}-${probe.id}-${retry ? 1 : 0}`}
+          avoidSlot={lastSlot}
+          onPick={onPick}
+          shaken={shaken}
+        />
       </div>
       <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => leave(PAUSED_KID_LINE, false)} />
     </main>
@@ -657,6 +674,7 @@ export function DailySession({
   const [party, setParty] = useState(false);
   const [shaken, setShaken] = useState<string>();
   const [wins, setWins] = useState(0);
+  const [lastSlot, setLastSlot] = useState<number>();
   const start = useRef(Date.now());
   const usedIds = useRef<Set<string>>(new Set());
   const item = queue[i];
@@ -852,9 +870,13 @@ export function DailySession({
           <ChoiceGrid
             key={`${playItem.id}-${version}`}
             choices={playItem.choices ?? []}
+            correctId={playItem.correctId}
+            seed={`${kidId}-${today()}-${module.id}-${playItem.id}-${version}`}
+            avoidSlot={lastSlot}
             shaken={shaken}
-            onPick={(id) => {
+            onPick={(id, correctSlot) => {
               const ok = id === playItem.correctId;
+              setLastSlot(correctSlot);
               if (!ok) setShaken(id);
               after(ok, "tap");
             }}
