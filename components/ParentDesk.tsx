@@ -11,6 +11,7 @@ import { useHouse } from "@/lib/store";
 import type { BandStatus, Child, ModuleVerdict, Stretch } from "@/lib/types";
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
   BoltIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -225,6 +226,16 @@ export function ParentHome() {
           </Link>
         </header>
         <p className="mt-3 text-slate-400">Grades, speed, pass/fail. Kids never see this language.</p>
+        <Link href="/parent/grades" className="desk-card mt-5 flex min-h-[72px] items-center gap-4 p-4 transition hover:bg-white/[0.08] active:scale-[0.99]">
+          <span className="orb h-12 w-12 shrink-0 text-white" style={{ ["--orb-a" as string]: "#34d399", ["--orb-b" as string]: "#059669" }}>
+            <CompassIcon size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg font-black text-white">Grading</span>
+            <span className="block text-sm text-slate-400">Every module, every function, every kid. Tap a module for the full sheet.</span>
+          </span>
+          <ArrowRightIcon size={18} className="shrink-0 text-emerald-200" />
+        </Link>
         <VoiceCard />
         <div className="mt-5">
           <KidSelect selected={child?.id} onPick={setId} />
