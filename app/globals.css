@@ -1086,4 +1086,137 @@
     border-radius: inherit;
     background: linear-gradient(90deg, var(--accent2), var(--accent));
   }
+
+  /* ---------------------------------------------------------------------------
+   Parent grading sheet: full-screen green pop-up, white text, big targets
+--------------------------------------------------------------------------- */
+
+  .grade-sheet {
+    color: white;
+    background:
+      radial-gradient(70% 45% at 100% 0%, rgb(190 242 100 / 0.22), transparent 70%),
+      radial-gradient(60% 40% at 0% 100%, rgb(16 185 129 / 0.35), transparent 70%),
+      linear-gradient(170deg, #052e16 0%, #14532d 45%, #166534 100%);
+    overscroll-behavior: contain;
+  }
+
+  .grade-close {
+    background: white;
+    color: #14532d;
+    box-shadow:
+      0 6px 0 rgb(0 0 0 / 0.25),
+      0 16px 30px -12px rgb(0 0 0 / 0.6);
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .grade-close:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+  }
+
+  .grade-sheet :focus-visible {
+    outline: 3px solid #fef08a;
+    outline-offset: 3px;
+  }
+
+  .grade-kid {
+    border-radius: 22px;
+    background: rgb(255 255 255 / 0.1);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+
+  .grade-tile {
+    height: 100%;
+    border-radius: 16px;
+    background: rgb(2 44 34 / 0.45);
+    border: 1px solid rgb(255 255 255 / 0.16);
+  }
+
+  .grade-bar {
+    display: block;
+    height: 10px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.18);
+    overflow: hidden;
+  }
+
+  .grade-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #bef264, #fef08a);
+    transition: width 300ms ease;
+  }
+
+  .grade-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: rgb(255 255 255 / 0.18);
+    color: white;
+  }
+
+  .grade-pill--pass {
+    background: #bef264;
+    color: #1a2e05;
+  }
+  .grade-pill--fail {
+    background: #fecdd3;
+    color: #881337;
+  }
+  .grade-pill--stop {
+    background: #fde68a;
+    color: #78350f;
+  }
+  .grade-pill--live {
+    background: white;
+    color: #14532d;
+  }
+
+  .grade-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.75rem;
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 900;
+    background: rgb(255 255 255 / 0.14);
+    border: 1px solid rgb(255 255 255 / 0.3);
+    color: white;
+    transition:
+      background 120ms ease,
+      transform 120ms ease;
+  }
+
+  .grade-action:hover {
+    background: rgb(255 255 255 / 0.22);
+  }
+
+  .grade-action:active {
+    transform: scale(0.96);
+  }
+
+  .grade-action--on {
+    background: white;
+    color: #14532d;
+    border-color: transparent;
+  }
+
+  .grade-action--go {
+    background: linear-gradient(135deg, #fde68a, #f59e0b);
+    color: #451a03;
+    border-color: transparent;
+  }
 }
