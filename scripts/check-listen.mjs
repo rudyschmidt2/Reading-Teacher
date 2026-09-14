@@ -12,6 +12,8 @@ const checks = [
   ["sit misses sat", isSpokenHit("sit", "sat") === false],
   ["/s/ hits ssss", isSpokenHit("ssss", "/s/")],
   ["/s/ hits sss", isSpokenHit("sss", "/s/")],
+  ["/ă/ hits apple", isSpokenHit("apple", "/ă/")],
+  ["/ă/ hits a", isSpokenHit("a", "/ă/")],
   ["ess hits letter s", isSpokenHit("ess", "s")],
   ["sat does not hit letter s", isSpokenHit("sat", "s") === false],
   ["um is not an attempt", looksLikeAttempt("um") === false],

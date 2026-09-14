@@ -12,9 +12,10 @@ Rudy said kid-facing spoken prompts were hard to understand. Browser `speechSynt
 This lane owns:
 
 - `lib/voice.ts`, `lib/phonemes.ts`, `app/api/voice/route.ts`
-- Neural TTS (OpenAI `gpt-4o-mini-tts`, voice `coral`) for prompts and letter sounds
+- Neural TTS (OpenAI `gpt-4o-mini-tts`, voice `marin`, `wav`) for prompts and letter sounds
+- Spoken forms stay English (`sss`, `a as in apple`) so the model does not slur
 - Cache, cancel previous clip, parent mute / Hear a prompt / Hear /s/
-- Env: `OPENAI_API_KEY` (primary), `AI_GATEWAY_API_KEY`, `READING_TEACHER_VOICE`, `READING_TEACHER_TTS_MODEL`
+- Env: `OPENAI_API_KEY` (primary), `AI_GATEWAY_API_KEY`, `READING_TEACHER_VOICE`, `READING_TEACHER_TTS_MODEL`, `READING_TEACHER_TTS_FORMAT`
 - No robotic browser fallback pretending to be natural. Missing key → written prompt only + parent note.
 
 The TTS module also lives on this leftover-play branch so voice can ship with the bottom toolbar. PR #3 still owns listen + PWA. Do not merge unless asked.

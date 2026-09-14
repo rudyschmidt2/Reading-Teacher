@@ -1,8 +1,12 @@
 export type SpeakKind = "prompt" | "phoneme" | "letter";
 
-/** Isolated letter sounds. Continuants stretch; stops keep a light vowel so kids can hear them. */
+/**
+ * Isolated letter sounds, written as English the TTS can say cleanly.
+ * Long letter-runs ("ssss") and comma-split cues ("aaa, apple") make the
+ * model slur or list the pieces. Continuants stay short; vowels use "as in".
+ */
 const SOUNDS: Record<string, string> = {
-  s: "ssss",
+  s: "sss",
   m: "mmm",
   n: "nnn",
   f: "fff",
@@ -10,12 +14,12 @@ const SOUNDS: Record<string, string> = {
   r: "rrr",
   z: "zzz",
   v: "vvv",
-  h: "hhh",
-  w: "www",
-  sh: "shhh",
-  th: "thhh",
+  h: "huh",
+  w: "wuh",
+  sh: "shh",
+  th: "th",
   ch: "ch",
-  ng: "nng",
+  ng: "ng",
   t: "tuh",
   p: "puh",
   b: "buh",
@@ -27,16 +31,16 @@ const SOUNDS: Record<string, string> = {
   y: "yuh",
   x: "ks",
   q: "kwuh",
-  ă: "aaa, apple",
-  ĕ: "ehh, egg",
-  ĭ: "ihh, igloo",
-  ŏ: "ahh, octopus",
-  ŭ: "uhh, umbrella",
-  a: "aaa, apple",
-  e: "ehh, egg",
-  i: "ihh, igloo",
-  o: "ahh, octopus",
-  u: "uhh, umbrella",
+  ă: "a as in apple",
+  ĕ: "e as in egg",
+  ĭ: "i as in igloo",
+  ŏ: "o as in octopus",
+  ŭ: "u as in umbrella",
+  a: "a as in apple",
+  e: "e as in egg",
+  i: "i as in igloo",
+  o: "o as in octopus",
+  u: "u as in umbrella",
 };
 
 const LETTER_NAMES: Record<string, string> = {
@@ -68,6 +72,15 @@ const LETTER_NAMES: Record<string, string> = {
   z: "zee",
 };
 
+const VOWEL_LETTER: Record<string, string> = {
+  ă: "a",
+  ĕ: "e",
+  ĭ: "i",
+  ŏ: "o",
+  ŭ: "u",
+};
+
+const SKIP_CUE = new Set(["as", "in"]);
 const SLASH_PHONEME = /\/([^/]{1,4})\//g;
 const BREVE = /[ăĕĭŏŭ]/g;
 
@@ -115,6 +128,25 @@ function compact(s: string) {
   return s.replace(/[\s,/]/g, "");
 }
 
+function listenAliases(target: string): string[] {
+  const inner = target.trim().replace(/^\/+|\/+$/g, "");
+  const spoken = expandPhonemeToken(target);
+  const aliases = new Set<string>();
+  const add = (value: string) => {
+    const c = compact(heardNorm(value));
+    if (c) aliases.add(c);
+  };
+  add(inner);
+  add(spoken);
+  add(letterName(inner));
+  const base = VOWEL_LETTER[inner] ?? VOWEL_LETTER[inner.toLowerCase()];
+  if (base) add(base);
+  for (const part of spoken.split(/[\s,]+/).filter(Boolean)) {
+    if (!SKIP_CUE.has(part.toLowerCase())) add(part);
+  }
+  return [...aliases];
+}
+
 /** Heard speech matches a speak-item target (word, letter, or /phoneme/). */
 export function isSpokenHit(heard: string, target: string) {
   const words = heardNorm(heard).split(" ").filter(Boolean);
@@ -124,9 +156,12 @@ export function isSpokenHit(heard: string, target: string) {
   const raw = compact(heardNorm(inner));
   const sound = compact(heardNorm(expandPhonemeToken(target)));
   const name = compact(heardNorm(letterName(inner)));
-  const names = new Set([raw, sound, name].filter(Boolean));
+  const names = new Set([raw, sound, name, ...listenAliases(target)].filter(Boolean));
   if (words.some((w) => names.has(compact(w)))) return true;
-  if (raw.length === 1 && /^([a-zăĕĭŏŭ])\1+$/i.test(h) && h[0]?.toLowerCase() === raw) return true;
+  const base = VOWEL_LETTER[raw] ?? raw;
+  if (raw.length === 1 && /^([a-zăĕĭŏŭ])\1+$/i.test(h) && (h[0]?.toLowerCase() === raw || h[0]?.toLowerCase() === base)) {
+    return true;
+  }
   if (raw.length >= 3 && words.some((w) => compact(w).includes(raw))) return true;
   if (sound.length >= 3 && (h === sound || words.some((w) => compact(w) === sound))) return true;
   return false;

@@ -1,12 +1,12 @@
 import { expandPhonemeToken, letterName, prepareSpokenText } from "../lib/phonemes.ts";
 
 const checks = [
-  ["/s/ is ssss", expandPhonemeToken("/s/") === "ssss"],
+  ["/s/ is sss", expandPhonemeToken("/s/") === "sss"],
   ["/m/ is mmm", expandPhonemeToken("/m/") === "mmm"],
   ["/t/ is tuh", expandPhonemeToken("/t/") === "tuh"],
-  ["/ă/ is apple cue", expandPhonemeToken("/ă/") === "aaa, apple"],
-  ["prompt keeps words and expands /s/", prepareSpokenText("Stamp the one that says /s/.") === "Stamp the one that says ssss."],
-  ["prompt expands /ă/", prepareSpokenText("Which one says /ă/?") === "Which one says aaa, apple?"],
+  ["/ă/ is apple cue", expandPhonemeToken("/ă/") === "a as in apple"],
+  ["prompt keeps words and expands /s/", prepareSpokenText("Stamp the one that says /s/.") === "Stamp the one that says sss."],
+  ["prompt expands /ă/", prepareSpokenText("Which one says /ă/?") === "Which one says a as in apple?"],
   ["letter s is ess", letterName("s") === "ess"],
   ["kind phoneme", prepareSpokenText("/n/", "phoneme") === "nnn"],
 ];
