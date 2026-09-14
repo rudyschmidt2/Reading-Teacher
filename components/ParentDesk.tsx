@@ -659,6 +659,7 @@ function SkillsMapCard({ child }: { child: Child }) {
   const bands = report ? report.bands : progress ? bandReports(progress) : bandsFor(child.track).map((b) => ({ id: b.id, title: b.title, status: "not-reached" as BandStatus, hits: 0, answered: 0, total: b.probes.length, known: [], missed: [] }));
   const summary = progress ? progressSummary(progress) : undefined;
   const state = report ? "done" : progress ? "running" : "fresh";
+  const scoutingId = state === "running" && progress?.cursor ? bandsFor(child.track)[progress.cursor.band]?.id : undefined;
   const sub =
     state === "done"
       ? `Finished ${report?.at.slice(0, 10)}. Path below was built from this map.`
@@ -674,7 +675,7 @@ function SkillsMapCard({ child }: { child: Child }) {
           <li key={b.id} className="desk-tile p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="font-bold text-white">{b.title}</p>
-              <span className={bandBadge(b.status)}>{b.status.replace("-", " ")}</span>
+              {b.id === scoutingId ? <span className="badge badge--info">scouting</span> : <span className={bandBadge(b.status)}>{b.status.replace("-", " ")}</span>}
             </div>
             {b.answered > 0 ? (
               <div className="mt-2 flex items-center gap-2">
