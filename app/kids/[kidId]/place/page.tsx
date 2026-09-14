@@ -1,9 +1,9 @@
 "use client";
 
-import { PlacementSession } from "@/components/KidPlay";
+import { DiagnosticSession } from "@/components/KidPlay";
 import { useParams } from "next/navigation";
 
 export default function PlacePage() {
   const { kidId } = useParams<{ kidId: string }>();
-  return <PlacementSession kidId={kidId} />;
+  return <DiagnosticSession kidId={kidId} />;
 }

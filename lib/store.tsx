@@ -15,11 +15,13 @@ import {
   buildCustomModule,
   pathForPlacement,
 } from "./catalog";
+import { answerProbe, finishDiagnostic, startDiagnostic, type Probe } from "./diagnostic";
 import { verdictKey } from "./grades";
 import type {
   Attempt,
   Child,
   ChildStatus,
+  DiagnosticReport,
   HouseState,
   ModuleDef,
   ModuleVerdict,
@@ -81,6 +83,9 @@ type HouseApi = {
   addStars: (kidId: string, n?: number) => void;
   recordAttempt: (attempt: Omit<Attempt, "id" | "at">) => Attempt;
   finishPlacement: (kidId: string, grade: PlacementShelf, note: string, kidLine: string, owned: string[]) => void;
+  /** Record one diagnostic answer. When the map is complete, builds the path and returns the report. */
+  answerDiagnostic: (kidId: string, probe: Probe, ok: boolean, ms: number) => { finished: boolean; report?: DiagnosticReport };
+  restartDiagnostic: (kidId: string) => void;
   setPath: (kidId: string, path: string[]) => void;
   moveModule: (kidId: string, from: number, to: number) => void;
   createAndAssign: (kidId: string, input: Parameters<typeof buildCustomModule>[0]) => ModuleDef;
@@ -167,6 +172,61 @@ export function HouseProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
       },
+      answerDiagnostic: (kidId, probe, ok, ms) => {
+        const kid = state.kids.find((k) => k.id === kidId);
+        if (!kid) return { finished: false };
+        const progress = answerProbe(kid.diagnostic ?? startDiagnostic(kid.track), probe, ok, ms);
+        if (progress.cursor) {
+          setState((s) => {
+            const next = { ...s, kids: s.kids.map((k) => (k.id === kidId ? { ...k, diagnostic: progress } : k)) };
+            persistNow(next);
+            return next;
+          });
+          return { finished: false };
+        }
+        const stamp = Date.now().toString(36);
+        const { report, built } = finishDiagnostic(kidId, progress, stamp);
+        const owned = report.bands.flatMap((b) => b.known.map((bit) => `${b.id}:${bit}`));
+        setState((s) => {
+          const modules = [...s.modules.filter((m) => !m.id.startsWith(`dx-${kidId}-`)), ...built.modules];
+          const verdicts = { ...s.verdicts };
+          for (const id of built.path) {
+            if (verdicts[verdictKey(kidId, id)] === "pass") delete verdicts[verdictKey(kidId, id)];
+          }
+          for (const id of built.passed) verdicts[verdictKey(kidId, id)] = "pass";
+          const next: HouseState = {
+            ...s,
+            modules,
+            verdicts,
+            kids: s.kids.map((k) =>
+              k.id === kidId
+                ? {
+                    ...k,
+                    diagnostic: progress,
+                    diagnosticReport: report,
+                    placementGrade: report.shelf,
+                    placementNote: report.note,
+                    kidLine: report.kidLine,
+                    ownedBits: owned,
+                    path: built.path,
+                  }
+                : k,
+            ),
+          };
+          persistNow(next);
+          return next;
+        });
+        return { finished: true, report };
+      },
+      restartDiagnostic: (kidId) =>
+        patchKid(kidId, (c) => ({
+          ...c,
+          diagnostic: undefined,
+          diagnosticReport: undefined,
+          placementGrade: undefined,
+          placementNote: undefined,
+          kidLine: undefined,
+        })),
       setPath: (kidId, path) => patchKid(kidId, (c) => ({ ...c, path })),
       moveModule: (kidId, from, to) =>
         patchKid(kidId, (c) => {
