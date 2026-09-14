@@ -3,7 +3,7 @@
 import { parseSpeakKind, prepareSpokenText, type SpeakKind } from "./phonemes";
 
 const MUTE_KEY = "reading-teacher-voice-mute";
-const CACHE_NAME = "reading-teacher-voice-v1";
+const CACHE_NAME = "reading-teacher-voice-v2";
 const MAX_TEXT = 280;
 
 let playToken = 0;
@@ -110,7 +110,7 @@ async function remember(url: string, blob: Blob) {
   if (typeof caches === "undefined") return;
   try {
     const cache = await caches.open(CACHE_NAME);
-    await cache.put(url, new Response(blob, { headers: { "Content-Type": "audio/mpeg" } }));
+    await cache.put(url, new Response(blob, { headers: { "Content-Type": blob.type || "audio/wav" } }));
   } catch {
     /* private mode / quota — memory cache is enough */
   }
@@ -163,7 +163,7 @@ async function playVoice(text: string, kind: SpeakKind) {
   inflight = ac;
   let res: Response;
   try {
-    res = await fetch(url, { signal: ac.signal, headers: { Accept: "audio/mpeg" } });
+    res = await fetch(url, { signal: ac.signal, headers: { Accept: "audio/wav, audio/mpeg" } });
   } catch {
     if (token === playToken) markIdle();
     return;

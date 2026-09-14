@@ -30,7 +30,7 @@ Push the branch, open a PR, and the [merge queue](.github/workflows/merge-queue.
 
 ## Voiceover
 
-Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `coral`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Browser `speechSynthesis` is not used; it muffled phonemes.
+Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `marin`, uncompressed `wav`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Phonemes are spoken as short English (`sss`, `a as in apple`), not letter-runs. Browser `speechSynthesis` is not used; it muffled phonemes.
 
 Add one of these to `.env.local` (local) or the Vercel project env (Production / Preview / Development):
 
@@ -38,8 +38,9 @@ Add one of these to `.env.local` (local) or the Vercel project env (Production /
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Yes (primary) | OpenAI key for `/v1/audio/speech`. Never commit it. |
 | `AI_GATEWAY_API_KEY` | Alternative | Used only if `OPENAI_API_KEY` is unset. Calls Vercel AI Gateway TTS. |
-| `READING_TEACHER_VOICE` | No | Voice id. Default `coral`. |
+| `READING_TEACHER_VOICE` | No | Voice id. Default `marin` (or `cedar`). |
 | `READING_TEACHER_TTS_MODEL` | No | Default `gpt-4o-mini-tts` (or `openai/gpt-4o-mini-tts` on the gateway). |
+| `READING_TEACHER_TTS_FORMAT` | No | Default `wav`. Use `mp3` only if a client cannot play wav. |
 
 ```bash
 cp .env.example .env.local

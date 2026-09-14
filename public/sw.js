@@ -1,11 +1,18 @@
-const VOICE = "reading-teacher-voice-v1";
+const VOICE = "reading-teacher-voice-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key.startsWith("reading-teacher-voice-") && key !== VOICE).map((key) => caches.delete(key))),
+      )
+      .then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener("fetch", (event) => {
