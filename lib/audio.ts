@@ -15,8 +15,10 @@ export {
 export {
   canListen,
   isRepeatAsk,
-  unlockKidMic,
+  tapEar,
   useHeard,
   useLessonListen,
   useListening,
+  useMicBlocked,
+  useTeacherTalking,
 } from "./listen";

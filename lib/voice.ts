@@ -72,13 +72,15 @@ export function stopSpeech() {
   playToken += 1;
   inflight?.abort();
   inflight = null;
-  speaking = false;
   if (current) {
     current.pause();
     current.removeAttribute("src");
     current.load();
     current = null;
   }
+  // A cancelled clip still counts as the teacher going quiet, so anything
+  // waiting on idle (the ear) is not left hanging.
+  if (speaking) markIdle();
 }
 
 function voiceUrl(spoken: string, kind: SpeakKind) {

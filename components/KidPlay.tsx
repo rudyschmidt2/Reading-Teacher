@@ -8,10 +8,12 @@ import {
   phonemeHint,
   speak,
   stopSpeech,
-  unlockKidMic,
+  tapEar,
   useHeard,
   useLessonListen,
   useListening,
+  useMicBlocked,
+  useTeacherTalking,
 } from "@/lib/audio";
 import {
   SCOUT_MY1,
@@ -110,11 +112,16 @@ function Dots({ total, current }: { total: number; current: number }) {
   );
 }
 
-function coachLine(kind?: PlayKind, widget?: Widget, listening?: boolean) {
-  if (kind === "speak") return listening ? "I'm listening. Just say it." : "Your turn. Say it out loud.";
+function coachLine(kind?: PlayKind, widget?: Widget, ear?: { listening: boolean; blocked: boolean; talking: boolean }) {
+  if (kind === "speak") {
+    if (ear?.blocked) return "Allow the microphone, then tap the ear.";
+    if (ear?.listening) return "I'm listening. Just say it.";
+    if (ear?.talking) return "Listen first…";
+    return "Your turn. Tap the ear and say it.";
+  }
   if (widget === "trace") return "Trace it with your finger.";
-  if (kind === "drag") return listening ? "Park the pieces. Say again if you missed it." : "Park the pieces.";
-  return listening ? "Tap one. Say again if you missed it." : "Tap one.";
+  if (kind === "drag") return "Park the pieces.";
+  return "Tap one.";
 }
 
 function PromptCard({
@@ -129,13 +136,15 @@ function PromptCard({
   widget?: Widget;
 }) {
   const listening = useListening();
+  const blocked = useMicBlocked();
+  const talking = useTeacherTalking();
   return (
     <section className="glass rise-in mx-auto mt-4 max-w-lg rounded-[28px] px-5 py-5 text-center">
       {eyebrow ? <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/70">{eyebrow}</p> : null}
       <button type="button" onClick={() => speak(prompt)} className="display title-pop mt-1 w-full text-4xl leading-tight">
         {prompt}
       </button>
-      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, listening)}</p>
+      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, { listening, blocked, talking })}</p>
     </section>
   );
 }
@@ -258,17 +267,25 @@ function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) =>
 
 function SpeakPanel({ onParent }: { onParent: () => void }) {
   const listening = useListening();
+  const blocked = useMicBlocked();
+  const talking = useTeacherTalking();
   const heard = useHeard();
+  const label = blocked ? "Allow the mic" : listening ? "I'm listening" : talking ? "Listen…" : "Tap to talk";
   return (
     <div className="flex flex-col items-center gap-4">
-      <div
-        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${listening ? "glow-pulse" : ""}`}
+      <button
+        type="button"
+        onClick={tapEar}
+        aria-pressed={listening}
+        aria-label={listening ? "Stop listening" : "Start listening"}
+        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${listening ? "glow-pulse" : talking ? "opacity-60" : ""}`}
         style={{ ["--orb-a" as string]: "#fb7185", ["--orb-b" as string]: "#e11d48" }}
-        aria-live="polite"
       >
         <MicIcon size={56} />
-        <span className="text-lg font-black">{listening ? "I'm listening" : "Your turn"}</span>
-      </div>
+        <span className="text-lg font-black" aria-live="polite">
+          {label}
+        </span>
+      </button>
       {heard ? (
         <p className="glass rounded-full px-4 py-2 text-lg">
           Heard: <span className="font-black">{heard}</span>
@@ -381,7 +398,6 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   const router = useRouter();
   const child = kid(kidId);
   const themePrompt = ready && child && child.status !== "waiting" ? "Pick today's game." : undefined;
-  useLessonListen({ prompt: themePrompt, enabled: Boolean(themePrompt) });
 
   useEffect(() => {
     if (themePrompt) speak(themePrompt);
@@ -397,7 +413,6 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   if (child.status === "waiting") return null;
 
   const choose = (id: ThemeId) => {
-    unlockKidMic();
     pickTheme(kidId, id);
     speak(THEMES.find((t) => t.id === id)?.label ?? "Let's play");
     if (!child.diagnosticReport) router.push(`/kids/${kidId}/place`);
@@ -405,7 +420,7 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   };
 
   return (
-    <main className="kid-stage theme-planets-space px-4 py-8" onPointerDown={unlockKidMic}>
+    <main className="kid-stage theme-planets-space px-4 py-8">
       <StageHeading eyebrow={`${child.name}'s pick`} title="Today's skin" sub="Smash one. You can pick a different one tomorrow." />
       <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4 md:max-w-3xl md:grid-cols-2">
         {THEMES.map((t, k) => (
@@ -452,7 +467,6 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   const [leaving, setLeaving] = useState(false);
   const sitting = useRef(0);
   const start = useRef(0);
-  useLessonListen({ prompt: probe?.prompt, enabled: Boolean(probe) && !banner });
 
   useEffect(() => {
     if (probe) speak(probe.prompt);
@@ -533,7 +547,7 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(probe, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} onPointerDown={unlockKidMic}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={band?.probes.length ?? 0} current={progress.cursor?.probe ?? 0} />
       <p className="mt-2 text-center text-xs font-extrabold uppercase tracking-[0.18em] text-white/60">
@@ -680,9 +694,19 @@ export function DailySession({
   const usedIds = useRef<Set<string>>(new Set());
   const item = queue[i];
   const spokenRef = useRef<(heard: string, hit: boolean) => void>(() => {});
+  // A word item dealt before words are unlocked is swapped for a safe tap
+  // step below, so it must not arm the ear either.
+  const blockedWord = Boolean(
+    item &&
+      child &&
+      !wordsUnlocked(child) &&
+      (item.dimension === "words" || item.dimension === "sentences" || (item.word && item.slots && item.slots.length > 1)),
+  );
+  const speakTarget = item?.kind === "speak" && !blockedWord ? item.speakTarget ?? item.word ?? item.letter : undefined;
+  // The ear only arms on a speak step; tap, drag, and trace steps keep it off.
   useLessonListen({
     prompt: item?.prompt,
-    target: item?.kind === "speak" ? item.speakTarget ?? item.word ?? item.letter : undefined,
+    target: speakTarget,
     onAnswer: (heard, hit) => spokenRef.current(heard, hit),
     enabled: Boolean(item) && !banner,
   });
@@ -747,7 +771,6 @@ export function DailySession({
 
   const seed = `${kidId}-${today()}`;
   const host = sittingHost(theme.id, seed);
-  const blockedWord = !wordsUnlocked(child) && (item.dimension === "words" || item.dimension === "sentences" || Boolean(item.word && item.slots && item.slots.length > 1));
   const rawPlay: LessonItem = blockedWord
     ? {
         id: "safe-letter-s",
@@ -802,8 +825,10 @@ export function DailySession({
     window.setTimeout(() => {
       setParty(false);
       setShaken(undefined);
+      // Clear the banner on every outcome; a miss retries the same card and
+      // the ear only re-arms once the banner is gone.
+      setBanner(null);
       if (ok) {
-        setBanner(null);
         const need = mode === "scout" ? 4 : 5;
         if (wins + 1 >= need && i + 1 >= queue.length - 1) {
           if (mode === "scout") {
@@ -846,7 +871,6 @@ export function DailySession({
             return copy;
           });
           setVersion(0);
-          setBanner(null);
         } else {
           setVersion((v) => v + 1);
         }
@@ -861,7 +885,7 @@ export function DailySession({
   const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} onPointerDown={unlockKidMic}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={queue.length} current={i} />
       <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} kind={playItem.kind} widget={playItem.widget} />

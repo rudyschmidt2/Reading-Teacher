@@ -55,11 +55,13 @@ Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
 
 ### How a turn works
 
-The teacher speaks the prompt, then the app listens. Kids do not tap a mic on/off.
+The microphone is off except on a speak step (repeat a word, repeat a sentence, read aloud).
 
-- Tap / drag / trace: do the move. Say **what** or **again** if they missed the words.
-- Speak items: just say it. The orb says “I'm listening.” Wrong word is an honest miss; silence is not.
+- Tap / drag / trace: do the move. The mic stays off. Tap **Again** to hear the line again.
+- Speak items: the teacher finishes the prompt, then the ear opens once. The orb says “I'm listening.” Wrong word is an honest miss; silence just closes the ear (“Tap to talk” opens it again). Saying **what** or **again** replays the prompt and the ear opens once more after it.
+- The ear never restarts on its own, never listens while the teacher talks, and closes when the child leaves the step.
 - **Again** on the bottom toolbar (and the big prompt) play the line again. Hold **That's enough** there to finish.
+- If the browser blocks the mic the orb says “Allow the mic” once; tap it after allowing.
 
 This needs the tablet microphone (Safari / Chrome). Install as an app so the mic stays allowed.
 
