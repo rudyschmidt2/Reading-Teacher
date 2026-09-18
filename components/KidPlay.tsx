@@ -23,6 +23,7 @@ import {
   themeOf,
   wordsUnlocked,
 } from "@/lib/catalog";
+import { elapsedMs, nowMs, todayStamp } from "@/lib/clock";
 import {
   PAUSED_KID_LINE,
   SITTING_CAP,
@@ -30,6 +31,8 @@ import {
   currentProbe,
   emptyDiagnostic,
   progressSummary,
+  scoutReportFrom,
+  type ScoutRow,
 } from "@/lib/diagnostic";
 import { dealChoices, dealTiles } from "@/lib/deal";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
@@ -38,12 +41,14 @@ import { nextSameSkill } from "@/lib/skip-stuck";
 import { useHouse } from "@/lib/store";
 import { tripSessionLength } from "@/lib/trip";
 import type {
+  Child,
   Choice,
   LessonItem,
   PlacementItem,
   PlayKind,
   ThemeId,
   Tile,
+  Track,
   Vowel,
   Widget,
 } from "@/lib/types";
@@ -63,8 +68,10 @@ import {
   TelescopeIcon,
 } from "@/components/Icons";
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
+/** Today's date, read once per mount so render stays pure. Sessions are minutes long, not days. */
+function useToday() {
+  const [day] = useState(todayStamp);
+  return day;
 }
 
 const CONFETTI_COLORS = ["#fde047", "#f472b6", "#22d3ee", "#a3e635", "#fb923c", "#c084fc", "#ffffff"];
@@ -171,7 +178,7 @@ function TileChip({
 }) {
   if (tile.kind === "vowel" && tile.vowel) {
     return (
-      <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-28 min-w-28 flex-col items-center justify-center p-3">
+      <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-24 min-w-24 flex-col items-center justify-center p-2 sm:min-h-28 sm:min-w-28 sm:p-3">
         <VowelFace vowel={tile.vowel} />
         {tile.label.length > 1 ? <span className="text-3xl font-black">{tile.label.slice(1)}</span> : null}
         <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">
@@ -181,7 +188,7 @@ function TileChip({
     );
   }
   return (
-    <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-28 min-w-28 flex-col items-center justify-center p-3 text-4xl font-black">
+    <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-24 min-w-24 flex-col items-center justify-center p-2 text-4xl font-black sm:min-h-28 sm:min-w-28 sm:p-3">
       {tile.label}
       {tile.kind === "sound" ? <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">sound</span> : null}
     </button>
@@ -206,21 +213,35 @@ function ChoiceGrid({
   shaken?: string;
 }) {
   const { dealt, correctSlot } = useMemo(() => dealChoices(choices, correctId, seed, avoidSlot), [choices, correctId, seed, avoidSlot]);
+  // Phone: three cards deal 2 + 1 (the odd card spans the row) so all three sit
+  // above the dock without scrolling. Wider screens get one row of three.
+  const three = dealt.length === 3;
+  const long = dealt.some((c) => c.label.length > 6);
   return (
-    <div className={`grid gap-4 ${dealt.length > 3 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
+    <div className={`grid gap-3 sm:gap-4 ${dealt.length > 3 || three ? "grid-cols-2" : "grid-cols-1"} ${three ? "sm:grid-cols-3" : ""}`} data-choices={dealt.length}>
       {dealt.map((c, k) => (
         <button
           key={c.id}
           type="button"
           onClick={() => onPick(c.id, correctSlot)}
-          className={`fat-card flex min-h-36 flex-col items-center justify-center gap-2 p-4 text-4xl font-black ${
-            shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 7)}`
-          }`}
+          className={`fat-card flex min-h-[7.25rem] flex-col items-center justify-center gap-1.5 p-3 font-black sm:min-h-36 sm:gap-2 sm:p-4 ${
+            long ? "text-2xl sm:text-3xl" : "text-4xl"
+          } ${three && k === 2 ? "col-span-2 sm:col-span-1" : ""} ${shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 7)}`}`}
         >
-          {c.emoji ? <span className="emoji-3d text-6xl">{c.emoji}</span> : null}
-          <span className={c.emoji ? "text-2xl" : ""}>{c.label}</span>
+          {c.emoji ? <span className="emoji-3d text-5xl sm:text-6xl">{c.emoji}</span> : null}
+          <span className={c.emoji ? "text-xl sm:text-2xl" : ""}>{c.label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Print the kid reads on a speak probe. The teacher never says it. */
+function PrintCard({ text }: { text: string }) {
+  const long = text.length > 8;
+  return (
+    <div className="glass-strong rise-in mx-auto mb-5 flex min-h-[6.5rem] max-w-lg items-center justify-center rounded-[28px] px-5 py-4 text-center" data-print={text}>
+      <span className={`display leading-none text-white ${long ? "text-4xl sm:text-5xl" : "text-7xl sm:text-8xl"}`}>{text}</span>
     </div>
   );
 }
@@ -331,8 +352,8 @@ function DragBoard({
   };
 
   return (
-    <div className="space-y-6">
-      <div className={`flex justify-center gap-3 ${shake ? "wobble" : ""}`}>
+    <div className="space-y-5 sm:space-y-6">
+      <div className={`flex justify-center gap-2 sm:gap-3 ${shake ? "wobble" : ""}`}>
         {slots.map((slot, i) => {
           const tile = filled[slot.id];
           const state = tile ? "slot--filled" : i === focus ? "slot--focus" : "";
@@ -341,7 +362,7 @@ function DragBoard({
               key={slot.id}
               type="button"
               onClick={() => setFocus(i)}
-              className={`slot flex h-28 w-28 items-center justify-center text-4xl font-black ${state}`}
+              className={`slot flex h-20 w-20 items-center justify-center text-4xl font-black sm:h-28 sm:w-28 ${slots.length > 3 ? "max-w-[22vw]" : ""} ${state}`}
               style={slot.glowVowel ? { boxShadow: `inset 0 0 0 5px ${VOWEL_FACE[slot.glowVowel].color}` } : undefined}
             >
               {tile ? (
@@ -355,7 +376,7 @@ function DragBoard({
           );
         })}
       </div>
-      <div className="flex flex-wrap justify-center gap-3">
+      <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
         {tiles.filter((t) => !used.has(t.id)).map((tile) => (
           <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
         ))}
@@ -467,16 +488,101 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   const [leaving, setLeaving] = useState(false);
   const sitting = useRef(0);
   const start = useRef(0);
+  const day = useToday();
 
   useEffect(() => {
     if (probe) speak(probe.prompt);
-    start.current = Date.now();
+    start.current = nowMs();
     return () => stopSpeech();
   }, [probe]);
 
+  const ready = Boolean(house.ready && child && progress && !leaving && !child.diagnosticReport && probe);
+  const isSpeak = ready && probe?.kind === "speak";
+  const seed = `${kidId}-${day}`;
+
+  const leave = (line: string, finished: boolean) => {
+    setLeaving(true);
+    router.push(`/kids/${kidId}/done?kind=place${finished ? "&finished=1" : ""}&line=${encodeURIComponent(line)}`);
+  };
+
+  const settle = (ok: boolean, isRetry: boolean, spoken?: { heard: string; pending: boolean }) => {
+    if (!probe || !child) return;
+    setParty(false);
+    setShaken(undefined);
+    setBanner(null);
+    setLocked(false);
+    setRetry(false);
+    sitting.current += 1;
+    const firstAnswerOk = ok && !isRetry;
+    const result = house.answerDiagnostic(
+      child.id,
+      probe,
+      firstAnswerOk,
+      elapsedMs(start.current),
+      spoken ? { pending: spoken.pending, heard: spoken.heard } : undefined,
+    );
+    if (result.finished && result.report) {
+      leave(result.report.kidLine, true);
+      return;
+    }
+    if (sitting.current >= SITTING_CAP) leave(PAUSED_KID_LINE, false);
+  };
+
+  const answer = (ok: boolean, kind: PlayKind, spoken?: { heard: string; pending: boolean }) => {
+    if (!probe || !child || locked) return;
+    setLocked(true);
+    const isRetry = retry;
+    house.recordAttempt({
+      kidId: child.id,
+      moduleId: "placement",
+      itemId: probe.id,
+      version: isRetry ? 1 : 0,
+      kind,
+      dimension: probe.dimension,
+      correct: ok && !spoken?.pending,
+      ms: elapsedMs(start.current),
+      spokenText: spoken?.heard,
+      spokenGrade: spoken ? (spoken.pending ? "pending" : ok ? "hit" : "miss") : undefined,
+      kidSaw: ok && !spoken?.pending ? "star" : "not that one",
+      source: "placement",
+    });
+    if (spoken?.pending) {
+      setBanner("Parent will listen.");
+      window.setTimeout(() => settle(false, isRetry, spoken), 700);
+      return;
+    }
+    if (ok) {
+      setParty(true);
+      setBanner(skinWin(theme.id, theme.win, seed));
+      house.addStars(child.id, 1);
+    } else {
+      setBanner(skinMiss(theme.id, theme.miss, seed));
+    }
+    window.setTimeout(() => {
+      // One honest retry for morale; only the first answer counts on the map.
+      if (!ok && !isRetry) {
+        setParty(false);
+        setShaken(undefined);
+        setBanner(null);
+        setRetry(true);
+        setLocked(false);
+        return;
+      }
+      settle(ok, isRetry, spoken);
+    }, ok ? 1100 : 1600);
+  };
+
+  // The ear arms only on a speak probe, after the prompt, once. Same contract as a lesson.
+  useLessonListen({
+    prompt: probe?.prompt,
+    target: isSpeak ? probe?.speakTarget : undefined,
+    onAnswer: (heard, hit) => answer(hit, "speak", { heard, pending: false }),
+    enabled: isSpeak && !banner && !locked,
+  });
+
   if (!house.ready || !child || !progress) return <Loading />;
   if (child.status === "waiting") return null;
-  if (!child.themeToday || child.themeDate !== today()) {
+  if (!child.themeToday || child.themeDate !== day) {
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
@@ -486,60 +592,14 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
     return null;
   }
 
-  const seed = `${kidId}-${today()}`;
   const host = sittingHost(theme.id, seed);
-  const leave = (line: string, finished: boolean) => {
-    setLeaving(true);
-    router.push(`/kids/${kidId}/done?kind=place${finished ? "&finished=1" : ""}&line=${encodeURIComponent(line)}`);
-  };
 
   const onPick = (choiceId: string, correctSlot: number) => {
     if (!probe || locked) return;
     const ok = choiceId === paintCorrectId(probe, theme.id);
-    setLocked(true);
     setLastSlot(correctSlot);
-    const isRetry = retry;
-    house.recordAttempt({
-      kidId: child.id,
-      moduleId: "placement",
-      itemId: probe.id,
-      version: isRetry ? 1 : 0,
-      kind: "tap",
-      dimension: probe.dimension,
-      correct: ok,
-      ms: Date.now() - start.current,
-      kidSaw: ok ? "star" : "not that one",
-      source: "placement",
-    });
-    if (ok) {
-      setParty(true);
-      setBanner(skinWin(theme.id, theme.win, seed));
-      house.addStars(child.id, 1);
-    } else {
-      setShaken(choiceId);
-      setBanner(skinMiss(theme.id, theme.miss, seed));
-    }
-    window.setTimeout(() => {
-      setParty(false);
-      setShaken(undefined);
-      // One honest retry for morale; only the first answer counts on the map.
-      if (!ok && !isRetry) {
-        setRetry(true);
-        setLocked(false);
-        return;
-      }
-      setBanner(null);
-      setLocked(false);
-      setRetry(false);
-      sitting.current += 1;
-      const firstAnswerOk = ok && !isRetry;
-      const result = house.answerDiagnostic(child.id, probe, firstAnswerOk, Date.now() - start.current);
-      if (result.finished && result.report) {
-        leave(result.report.kidLine, true);
-        return;
-      }
-      if (sitting.current >= SITTING_CAP) leave(PAUSED_KID_LINE, false);
-    }, ok ? 1100 : 1600);
+    if (!ok) setShaken(choiceId);
+    answer(ok, "tap");
   };
 
   const lesson = asLesson(probe);
@@ -547,24 +607,31 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(probe, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} data-probe={probe.id} data-probe-kind={probe.kind ?? "tap"}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={band?.probes.length ?? 0} current={progress.cursor?.probe ?? 0} />
       <p className="mt-2 text-center text-xs font-extrabold uppercase tracking-[0.18em] text-white/60">
         Map {summary ? summary.bandIndex + 1 : 1} of {summary?.bandCount ?? 1}
       </p>
-      <PromptCard eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind="tap" widget={lesson.widget} />
+      <PromptCard eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind={probe.kind ?? "tap"} widget={lesson.widget} />
       {banner ? <HonestBanner text={banner} party={party} /> : null}
-      <div className="mx-auto mt-6 max-w-lg">
-        <ChoiceGrid
-          key={`${probe.id}-${retry ? 1 : 0}`}
-          choices={lesson.choices ?? []}
-          correctId={lesson.correctId}
-          seed={`${seed}-${probe.id}-${retry ? 1 : 0}`}
-          avoidSlot={lastSlot}
-          onPick={onPick}
-          shaken={shaken}
-        />
+      <div className="mx-auto mt-5 max-w-lg sm:mt-6">
+        {isSpeak ? (
+          <>
+            {probe.print ? <PrintCard text={probe.print} /> : null}
+            <SpeakPanel onParent={() => answer(false, "speak", { heard: "parent-listen", pending: true })} />
+          </>
+        ) : (
+          <ChoiceGrid
+            key={`${probe.id}-${retry ? 1 : 0}`}
+            choices={lesson.choices ?? []}
+            correctId={lesson.correctId}
+            seed={`${seed}-${probe.id}-${retry ? 1 : 0}`}
+            avoidSlot={lastSlot}
+            onPick={onPick}
+            shaken={shaken}
+          />
+        )}
       </div>
       <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => leave(PAUSED_KID_LINE, false)} />
     </main>
@@ -665,6 +732,30 @@ function KidChrome({
   );
 }
 
+type Deck = { key: string; items: LessonItem[]; used: string[] };
+
+/** Deal a session: one tap, one drag, one speak, one trace up front, then the rest, cut to the session length. */
+function dealDeck(key: string, mod: { items: LessonItem[] } | undefined, mode: "daily" | "scout" | "try", sessionLength: Child["sessionLength"], track?: Track): Deck {
+  if (!mod) return { key, items: [], used: [] };
+  if (mode === "scout") {
+    const scout = track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
+    return { key, items: scout, used: scout.map((it) => it.id) };
+  }
+  const base = mod.items;
+  const taps = base.filter((it) => it.kind === "tap");
+  const drags = base.filter((it) => it.kind === "drag");
+  const speaks = base.filter((it) => it.kind === "speak");
+  const traces = base.filter((it) => it.widget === "trace");
+  const usedLead = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
+  const rest = base.filter((it) => !usedLead.has(it.id));
+  const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean) as LessonItem[];
+  const width = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const session = tripSessionLength(sessionLength, width);
+  const n = mode === "try" ? lead.length : session === "shorter" ? 5 : session === "longer" ? 9 : 7;
+  const items = lead.slice(0, n);
+  return { key, items, used: items.map((it) => it.id) };
+}
+
 export function DailySession({
   kidId,
   mode,
@@ -681,8 +772,8 @@ export function DailySession({
   const picked = moduleId ? house.module(moduleId) : undefined;
   const safePicked =
     picked && child && (child.track === "letters" && picked.track === "words" && !wordsUnlocked(child) ? undefined : picked);
-  const module = safePicked ?? (child ? kidNextModule(child, house.state) : undefined);
-  const [queue, setQueue] = useState<LessonItem[]>([]);
+  const mod = safePicked ?? (child ? kidNextModule(child, house.state) : undefined);
+  const day = useToday();
   const [i, setI] = useState(0);
   const [version, setVersion] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
@@ -690,10 +781,21 @@ export function DailySession({
   const [shaken, setShaken] = useState<string>();
   const [wins, setWins] = useState(0);
   const [lastSlot, setLastSlot] = useState<number>();
-  const start = useRef(Date.now());
-  const usedIds = useRef<Set<string>>(new Set());
+  const start = useRef(0);
+  const scoutRows = useRef<ScoutRow[]>([]);
+  const scoutSaved = useRef(false);
+
+  // The deck is derived from the module and mode; skip-stuck swaps one card at
+  // a time through `swap`, keyed so a new module deals a fresh deck.
+  const sessionLength = child?.sessionLength ?? "standard";
+  const track = child?.track;
+  const deckKey = `${mod?.id ?? "none"}|${mode}|${sessionLength}|${track}`;
+  const baseDeck = dealDeck(deckKey, mod, mode, sessionLength, track);
+  const [swap, setSwap] = useState<Deck | null>(null);
+  const deck = swap && swap.key === deckKey ? swap : baseDeck;
+  const queue = deck.items;
   const item = queue[i];
-  const spokenRef = useRef<(heard: string, hit: boolean) => void>(() => {});
+
   // A word item dealt before words are unlocked is swapped for a safe tap
   // step below, so it must not arm the ear either.
   const blockedWord = Boolean(
@@ -703,113 +805,55 @@ export function DailySession({
       (item.dimension === "words" || item.dimension === "sentences" || (item.word && item.slots && item.slots.length > 1)),
   );
   const speakTarget = item?.kind === "speak" && !blockedWord ? item.speakTarget ?? item.word ?? item.letter : undefined;
-  // The ear only arms on a speak step; tap, drag, and trace steps keep it off.
-  useLessonListen({
-    prompt: item?.prompt,
-    target: speakTarget,
-    onAnswer: (heard, hit) => spokenRef.current(heard, hit),
-    enabled: Boolean(item) && !banner,
-  });
-
-  useEffect(() => {
-    if (!module) return;
-    const base = module.items;
-    if (mode === "scout") {
-      const scout = child?.track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
-      usedIds.current = new Set(scout.map((it) => it.id));
-      setQueue(scout);
-    } else {
-      const taps = base.filter((it) => it.kind === "tap");
-      const drags = base.filter((it) => it.kind === "drag");
-      const speaks = base.filter((it) => it.kind === "speak");
-      const traces = base.filter((it) => it.widget === "trace");
-      const used = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
-      const rest = base.filter((it) => !used.has(it.id));
-      const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean);
-      const width = typeof window !== "undefined" ? window.innerWidth : 1024;
-      const session = tripSessionLength(child?.sessionLength ?? "standard", width);
-      const n = mode === "try" ? lead.length : session === "shorter" ? 5 : session === "longer" ? 9 : 7;
-      const next = lead.slice(0, n);
-      usedIds.current = new Set(next.map((it) => it.id));
-      setQueue(next);
-    }
-  }, [module, mode, child?.sessionLength, child?.track]);
+  const seed = `${kidId}-${day}`;
 
   useEffect(() => {
     if (item) speak(item.prompt);
-    start.current = Date.now();
+    start.current = nowMs();
     return () => stopSpeech();
   }, [item]);
 
-  if (!house.ready || !child) return <Loading />;
-  if (child.status === "waiting") {
-    router.replace(`/kids/${kidId}/waiting`);
-    return null;
-  }
-  if (!child.themeToday || child.themeDate !== today()) {
-    router.replace(`/kids/${kidId}/theme`);
-    return null;
-  }
-  if (!child.diagnosticReport && mode === "daily") {
-    router.replace(`/kids/${kidId}/place`);
-    return null;
-  }
-  if (!module || !item) {
-    return (
-      <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center p-6 text-center`}>
-        <span className="orb h-24 w-24 text-white">
-          <TelescopeIcon size={44} />
-        </span>
-        <p className="display title-pop mt-6 text-4xl">No module on the path yet.</p>
-        <Link href="/parent" className="btn-solid mt-6 inline-flex items-center gap-2 px-6 py-3 text-lg font-black">
-          Parent path
-          <ArrowRightIcon size={20} />
-        </Link>
-      </main>
-    );
-  }
-
-  const seed = `${kidId}-${today()}`;
-  const host = sittingHost(theme.id, seed);
-  const rawPlay: LessonItem = blockedWord
-    ? {
-        id: "safe-letter-s",
-        kind: "tap",
-        widget: "stamp",
-        prompt: "Stamp s.",
-        dimension: "letterRecognition",
-        choices: ["s", "t", "m"].map((l) => ({ id: l, label: l })),
-        correctId: "s",
-        letter: "s",
-      }
-    : item;
-  const playItem: LessonItem = {
-    ...rawPlay,
-    choices: paintChoices(rawPlay, theme.id),
-    correctId: paintCorrectId(rawPlay, theme.id),
+  // Every scout answer feeds one real report at the end of the tunnel; the
+  // daily path never changes from it.
+  const finishScout = () => {
+    if (mode !== "scout" || !child || scoutSaved.current || scoutRows.current.length === 0) return;
+    scoutSaved.current = true;
+    house.saveScout(scoutReportFrom(child.id, child.track, scoutRows.current));
   };
 
   const after = (ok: boolean, kind: PlayKind, spoken?: { text: string; pending: boolean }) => {
+    if (!child || !mod || !item) return;
+    const playedId = blockedWord ? "safe-letter-s" : item.id;
+    const dimension = blockedWord ? "letterRecognition" : item.dimension;
+    const ms = elapsedMs(start.current);
     house.recordAttempt({
       kidId: child.id,
-      moduleId: module.id,
-      itemId: playItem.id,
+      moduleId: mod.id,
+      itemId: playedId,
       version,
       kind,
-      dimension: playItem.dimension,
+      dimension,
       correct: ok,
-      ms: Date.now() - start.current,
+      ms,
       spokenText: spoken?.text,
       spokenGrade: spoken ? (spoken.pending ? "pending" : ok ? "hit" : "miss") : undefined,
       kidSaw: ok && !spoken?.pending ? "star" : "not that one",
       source: mode === "scout" ? "scout" : mode === "try" ? "try" : "daily",
     });
+    // Only the first answer on a card counts for the scout, like the map.
+    if (mode === "scout" && version === 0 && !blockedWord && !scoutRows.current.some((r) => r.item.id === item.id)) {
+      scoutRows.current.push({ item, ok, ms, pending: spoken?.pending, heard: spoken?.text });
+    }
+    const finish = () => {
+      finishScout();
+      router.push(`/kids/${kidId}/done?kind=${mode}&module=${mod.id}`);
+    };
     if (spoken?.pending) {
       setBanner("Parent will listen.");
       window.setTimeout(() => {
         setBanner(null);
         setVersion(0);
-        if (i + 1 >= queue.length) router.push(`/kids/${kidId}/done?kind=${mode}&module=${module.id}`);
+        if (i + 1 >= queue.length) finish();
         else setI((n) => n + 1);
       }, 700);
       return;
@@ -829,47 +873,22 @@ export function DailySession({
       // the ear only re-arms once the banner is gone.
       setBanner(null);
       if (ok) {
-        const need = mode === "scout" ? 4 : 5;
-        if (wins + 1 >= need && i + 1 >= queue.length - 1) {
-          if (mode === "scout") {
-            const letters = child.track === "letters";
-            house.saveScout({
-              kidId: child.id,
-              pack: letters ? "MY-1" : "RH-1",
-              ceiling: letters ? "crowded name" : "short-i CVC",
-              floor: letters ? "lookalike" : "beginning blend",
-              bands: letters
-                ? [
-                    { name: "crowded name", tag: "shaky" },
-                    { name: "first-sound", tag: "unknown" },
-                  ]
-                : [
-                    { name: "short-i CVC", tag: "shaky" },
-                    { name: "beginning blend", tag: "unknown" },
-                  ],
-              drafts: letters
-                ? [{ title: "Lookalike letters", skill: "b/d/p stamp", seeds: "b, d, p", stretch: "stretch-hard" }]
-                : [{ title: "Short-i CVC", skill: "sit, pin, tin", seeds: "sit, pin, tin", stretch: "stretch-hard" }],
-              readyForPrintWords: false,
-              status: "pending",
-            });
-          }
-          router.push(`/kids/${kidId}/done?kind=${mode}&module=${module.id}`);
+        // A strong kid ends a daily one card early. The scout plays every
+        // item: its last card is the hardest one and the report needs it.
+        if (mode !== "scout" && wins + 1 >= 5 && i + 1 >= queue.length - 1) {
+          finish();
           return;
         }
         setVersion(0);
         setI((n) => Math.min(n + 1, queue.length - 1));
-        if (i + 1 >= queue.length) router.push(`/kids/${kidId}/done?kind=${mode}&module=${module.id}`);
+        if (i + 1 >= queue.length) finish();
       } else if (version + 1 >= 2) {
-        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : module.items;
-        const alt = nextSameSkill(bank, item, usedIds.current);
+        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : mod.items;
+        const alt = nextSameSkill(bank, item, new Set(deck.used));
         if (alt) {
-          usedIds.current.add(alt.id);
-          setQueue((q) => {
-            const copy = [...q];
-            copy[i] = alt;
-            return copy;
-          });
+          const items = [...queue];
+          items[i] = alt;
+          setSwap({ key: deckKey, items, used: [...deck.used, alt.id] });
           setVersion(0);
         } else {
           setVersion((v) => v + 1);
@@ -880,12 +899,65 @@ export function DailySession({
     }, ok ? 1100 : 1600);
   };
 
-  spokenRef.current = (heard, hit) => after(hit, "speak", { text: heard, pending: false });
+  // The ear only arms on a speak step; tap, drag, and trace steps keep it off.
+  useLessonListen({
+    prompt: item?.prompt,
+    target: speakTarget,
+    onAnswer: (heard, hit) => after(hit, "speak", { text: heard, pending: false }),
+    enabled: Boolean(item) && !banner,
+  });
+
+  if (!house.ready || !child) return <Loading />;
+  if (child.status === "waiting") {
+    router.replace(`/kids/${kidId}/waiting`);
+    return null;
+  }
+  if (!child.themeToday || child.themeDate !== day) {
+    router.replace(`/kids/${kidId}/theme`);
+    return null;
+  }
+  if (!child.diagnosticReport && mode === "daily") {
+    router.replace(`/kids/${kidId}/place`);
+    return null;
+  }
+  if (!mod || !item) {
+    return (
+      <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center p-6 text-center`}>
+        <span className="orb h-24 w-24 text-white">
+          <TelescopeIcon size={44} />
+        </span>
+        <p className="display title-pop mt-6 text-4xl">No module on the path yet.</p>
+        <Link href="/parent" className="btn-solid mt-6 inline-flex items-center gap-2 px-6 py-3 text-lg font-black">
+          Parent path
+          <ArrowRightIcon size={20} />
+        </Link>
+      </main>
+    );
+  }
+
+  const host = sittingHost(theme.id, seed);
+  const rawPlay: LessonItem = blockedWord
+    ? {
+        id: "safe-letter-s",
+        kind: "tap",
+        widget: "stamp",
+        prompt: "Stamp s.",
+        dimension: "letterRecognition",
+        choices: ["s", "t", "m"].map((l) => ({ id: l, label: l })),
+        correctId: "s",
+        letter: "s",
+      }
+    : item;
+  const playItem: LessonItem = {
+    ...rawPlay,
+    choices: paintChoices(rawPlay, theme.id),
+    correctId: paintCorrectId(rawPlay, theme.id),
+  };
 
   const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`}>
+    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} data-item={playItem.id} data-item-kind={playItem.kind}>
       <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
       <Dots total={queue.length} current={i} />
       <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} kind={playItem.kind} widget={playItem.widget} />
@@ -896,7 +968,7 @@ export function DailySession({
             key={`${playItem.id}-${version}`}
             choices={playItem.choices ?? []}
             correctId={playItem.correctId}
-            seed={`${kidId}-${today()}-${module.id}-${playItem.id}-${version}`}
+            seed={`${seed}-${mod.id}-${playItem.id}-${version}`}
             avoidSlot={lastSlot}
             shaken={shaken}
             onPick={(id, correctSlot) => {
@@ -913,7 +985,14 @@ export function DailySession({
           <SpeakPanel onParent={() => after(false, "speak", { text: "parent-listen", pending: true })} />
         ) : null}
       </div>
-      <PlayDock prompt={playItem.prompt} hint={playItem.parentHint} onEnough={() => router.push(`/kids/${kidId}/done?kind=${mode}`)} />
+      <PlayDock
+        prompt={playItem.prompt}
+        hint={playItem.parentHint}
+        onEnough={() => {
+          finishScout();
+          router.push(`/kids/${kidId}/done?kind=${mode}`);
+        }}
+      />
     </main>
   );
 }
