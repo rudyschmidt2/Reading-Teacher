@@ -218,6 +218,8 @@ try {
   await page.locator('[data-prefill-band="digraphs"]').waitFor();
   const seeds = await page.locator("#create-module textarea").inputValue();
   check("Practice these pre-fills the missed bits", /th/.test(seeds) && /ck/.test(seeds), seeds);
+  await page.waitForTimeout(600); // smooth scroll to the form
+  await page.locator("#create-module").scrollIntoViewIfNeeded();
   await shot("06-practice-these");
   await page.locator("#create-module button[type=submit]").click();
   await page.waitForTimeout(400);
