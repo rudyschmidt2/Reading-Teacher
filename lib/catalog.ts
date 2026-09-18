@@ -7,7 +7,7 @@ import {
   PLACEMENT_B_NAMES,
   PLACEMENT_B_SOUNDS,
   RH_STARTER_PATH,
-} from "./banks";
+} from "./banks.ts";
 import type {
   Child,
   GradeDimension,
@@ -29,8 +29,8 @@ export {
   RH_STARTER_PATH,
   SCOUT_MY1,
   SCOUT_RH1,
-} from "./banks";
-export { pathForPlacement } from "./banks";
+} from "./banks.ts";
+export { pathForPlacement } from "./banks.ts";
 
 export const THEMES: {
   id: ThemeId;

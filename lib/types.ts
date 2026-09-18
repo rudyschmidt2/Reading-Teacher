@@ -94,6 +94,8 @@ export type Child = {
   kidLine?: string;
   ownedBits?: string[];
   path: string[];
+  /** Module ids the parent held or dropped from the path. Nothing automatic puts them back. */
+  held?: string[];
   stretch: Stretch;
   sessionLength: SessionLength;
   readyForPrintWords: boolean;
@@ -107,6 +109,8 @@ export type Child = {
 
 export type BandStatus = "known" | "shaky" | "unknown" | "not-reached";
 
+export type ProbeKind = "tap" | "speak";
+
 export type DiagnosticRow = {
   probeId: string;
   band: string;
@@ -114,6 +118,11 @@ export type DiagnosticRow = {
   ok: boolean;
   ms: number;
   at: string;
+  /** Tap unless said otherwise; speak rows never count toward speed. */
+  kind?: ProbeKind;
+  /** A spoken answer nobody has graded yet ("Parent will listen"). Not a hit, not a miss. */
+  pending?: boolean;
+  heard?: string;
 };
 
 export type DiagnosticProgress = {
@@ -134,6 +143,10 @@ export type BandReport = {
   total: number;
   known: string[];
   missed: string[];
+  /** Average ms on real tap hits in this band. Undefined until there is one. */
+  avgMs?: number;
+  /** Spoken probes in this band: graded hits and misses, plus ones still waiting for a parent ear. */
+  speak?: { hits: number; misses: number; pending: number };
 };
 
 export type DiagnosticReport = {
@@ -144,8 +157,14 @@ export type DiagnosticReport = {
   frontier?: string;
   shelf: PlacementShelf;
   note: string;
+  /** What the map built and marked passed. Kept apart from `note` so a regrade can refresh the map without touching it. */
+  pathNote?: string;
   kidLine: string;
   built: { moduleId: string; title: string; why: string }[];
+  /** Average ms on real tap hits across the whole map. */
+  speedMs?: number;
+  /** Letters track only: letter sounds and first sounds both known. The parent still unlocks words by hand. */
+  readyForPrintWords?: boolean;
 };
 
 export type Attempt = {
@@ -165,19 +184,33 @@ export type Attempt = {
   source: "placement" | "daily" | "scout" | "try";
 };
 
+export type ScoutDraft = {
+  title: string;
+  skill: string;
+  seeds: string;
+  stretch: Stretch;
+  /** When set, the draft is built with this band's own item makers on these bits. */
+  bandId?: string;
+  bits?: string[];
+};
+
 export type ScoutReport = {
   kidId: string;
   pack: string;
   ceiling: string;
   floor: string;
-  bands: { name: string; tag: "known" | "shaky" | "unknown" }[];
-  drafts: { title: string; skill: string; seeds: string; stretch: Stretch }[];
+  bands: { name: string; tag: "known" | "shaky" | "unknown"; id?: string; hits?: number; answered?: number; missed?: string[] }[];
+  drafts: ScoutDraft[];
   readyForPrintWords?: boolean;
   status: "pending" | "approved" | "ignored";
+  at?: string;
+  answered?: number;
+  hits?: number;
 };
 
 export type HouseState = {
-  version: 1;
+  /** 1: paths were back-filled from the starter kids on every load. 2: seeding ran once; `held` is honoured. */
+  version: 2;
   kids: Child[];
   modules: ModuleDef[];
   attempts: Attempt[];
@@ -194,4 +227,9 @@ export type PlacementItem = {
   choices: Choice[];
   correctId: string;
   dimension: GradeDimension;
+  /** Tap unless said otherwise. A speak probe has no choices; the kid says `speakTarget`. */
+  kind?: ProbeKind;
+  speakTarget?: string;
+  /** Print the kid reads on a speak probe (a letter, a word, a line). The teacher does not read it aloud. */
+  print?: string;
 };
