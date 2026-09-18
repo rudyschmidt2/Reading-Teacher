@@ -11,6 +11,7 @@ import {
   moduleFunctionGrades,
   moduleProgress,
   verdictKey,
+  verdictOf,
   type FunctionGrade,
   type ModuleKidStatus,
   type ModuleProgress,
@@ -227,7 +228,7 @@ function KidStrip({ kids, filter, onPick }: { kids: Child[]; filter: string | nu
         let sub: string;
         if (k.status === "waiting") sub = "waiting";
         else {
-          const passed = k.path.filter((id) => state.verdicts[verdictKey(k.id, id)] === "pass").length;
+          const passed = k.path.filter((id) => verdictOf(state, k.id, id) === "pass").length;
           sub = k.path.length ? `${passed}/${k.path.length} passed` : "no path yet";
           const map = mapLine(k);
           if (map.state === "done") sub += ` · ${map.shelf}${map.frontier ? ` · ${map.frontier}` : ""}`;
@@ -365,11 +366,11 @@ function ModuleCard({ module, kids, onOpen }: { module: ModuleDef; kids: Child[]
                   <span className="stat-bar flex-1 opacity-40" aria-hidden />
                 ) : (
                   <span className="stat-bar flex-1" role="img" aria-label={`${p.itemsHit} of ${p.items} items hit`}>
-                    <span style={{ width: `${p.pct}%` }} />
+                    <span style={{ width: `${p.pct ?? 0}%` }} />
                   </span>
                 )}
                 <span className="w-9 shrink-0 text-right text-[11px] font-bold tabular-nums text-slate-400">
-                  {p.status === "waiting" ? "—" : `${p.pct}%`}
+                  {p.pct === undefined ? "—" : `${p.pct}%`}
                 </span>
               </span>
             );
@@ -566,10 +567,10 @@ function OverallRow({ progress }: { progress: ModuleProgress }) {
     <div className="mt-3">
       <div className="flex items-center justify-between text-sm font-bold text-white">
         <span>Module progress</span>
-        <span className="tabular-nums">{progress.pct}%</span>
+        <span className="tabular-nums">{progress.pct === undefined ? "—" : `${progress.pct}%`}</span>
       </div>
       <span className="grade-bar mt-1.5" role="img" aria-label={`${progress.itemsHit} of ${progress.items} items hit`}>
-        <span style={{ width: `${progress.pct}%` }} />
+        <span style={{ width: `${progress.pct ?? 0}%` }} />
       </span>
       <p className="mt-1.5 text-xs font-bold text-emerald-50/85">
         {total === 0

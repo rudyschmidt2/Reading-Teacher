@@ -1,17 +1,18 @@
+import { daysBetween, localDay } from "./clock.ts";
 import type { Child } from "./types";
 
-export type ScoutClock = Pick<Child, "dailySessions" | "lastDailyDate" | "lastScoutDate">;
+export type ScoutClock = Pick<Child, "dailySessions" | "lastDailyDate" | "lastScoutDate"> & { plan?: { lastScoutSession?: number } };
 
 export function todayStamp(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
+  return localDay(now);
 }
 
-function daysBetween(from: string, to: string): number {
-  const a = Date.UTC(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1, Number(from.slice(8, 10)));
-  const b = Date.UTC(Number(to.slice(0, 4)), Number(to.slice(5, 7)) - 1, Number(to.slice(8, 10)));
-  return Math.round((b - a) / 86_400_000);
-}
-
+/**
+ * A scout is due after a daily finished today and: the kid has five or more
+ * dailies and has never scouted; or five dailies have passed since the last
+ * scout; or the last scout is a week old. Never on a day with no daily (no
+ * cold open) and never twice in one day.
+ */
 export function scoutDue(child: ScoutClock, now = new Date()): boolean {
   const today = todayStamp(now);
   const sessions = child.dailySessions ?? 0;
@@ -19,10 +20,11 @@ export function scoutDue(child: ScoutClock, now = new Date()): boolean {
   if (child.lastScoutDate === today) return false;
 
   const neverScouted = !child.lastScoutDate;
-  const everyFive = sessions > 0 && sessions % 5 === 0;
+  const since = child.plan?.lastScoutSession;
+  const fiveSince = since !== undefined ? sessions - since >= 5 : sessions > 0 && sessions % 5 === 0;
   const firstScout = neverScouted && sessions >= 5;
   const weekly = child.lastScoutDate ? daysBetween(child.lastScoutDate, today) >= 7 : false;
-  return firstScout || everyFive || weekly;
+  return firstScout || fiveSince || weekly;
 }
 
 export function scoutDueReason(child: ScoutClock, now = new Date()): string | null {

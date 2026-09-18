@@ -1,6 +1,6 @@
 import { STARTER_KIDS, STARTER_MODULES } from "./catalog.ts";
 import { buildPath } from "./diagnostic.ts";
-import type { Child, HouseState, ModuleDef, ModuleVerdict } from "./types";
+import type { Child, HouseState, KidPlan, ModuleDef, ModuleVerdict, VerdictRecord } from "./types";
 
 /**
  * Pure helpers for the house record: the empty house, the migration chain
@@ -8,16 +8,25 @@ import type { Child, HouseState, ModuleDef, ModuleVerdict } from "./types";
  * allowed to change a kid's path so the held list stays honest.
  */
 
-export const HOUSE_VERSION = 2 as const;
+export const HOUSE_VERSION = 3 as const;
+
+export function defaultPlan(): KidPlan {
+  return { gate: "path", moduleStretch: {}, review: [], proposals: [] };
+}
+
+export function planOf(kid: Child): KidPlan {
+  return kid.plan ?? defaultPlan();
+}
 
 export function emptyHouse(): HouseState {
   return structuredClone({
     version: HOUSE_VERSION,
-    kids: STARTER_KIDS,
+    kids: STARTER_KIDS.map((k) => ({ ...k, held: [], plan: defaultPlan() })),
     modules: STARTER_MODULES,
     attempts: [],
     verdicts: {},
     scouts: [],
+    sessions: [],
   });
 }
 
@@ -35,7 +44,8 @@ export function withPath(kid: Child, path: string[]): Child {
   return { ...kid, path, held: [...held] };
 }
 
-type LegacyHouse = Omit<HouseState, "version"> & { version: number };
+type LegacyVerdicts = Record<string, ModuleVerdict | VerdictRecord>;
+type LegacyHouse = Omit<HouseState, "version" | "verdicts" | "sessions"> & { version: number; verdicts?: LegacyVerdicts; sessions?: HouseState["sessions"] };
 
 function isHouseLike(x: unknown): x is LegacyHouse {
   return typeof x === "object" && x !== null && Array.isArray((x as LegacyHouse).kids) && typeof (x as LegacyHouse).version === "number";
@@ -44,6 +54,8 @@ function isHouseLike(x: unknown): x is LegacyHouse {
 function starterFor(id: string) {
   return STARTER_KIDS.find((s) => s.id === id);
 }
+
+const verdictOfLegacy = (v: ModuleVerdict | VerdictRecord | undefined): ModuleVerdict | undefined => (typeof v === "string" ? v : v?.verdict);
 
 /**
  * v1 → v2. Version 1 re-added every starter module to every kid's path on
@@ -54,9 +66,9 @@ function starterFor(id: string) {
  * library shows it with "Put back". Starter modules missing from the library
  * are still added — that is the library, not the path.
  */
-function migrateV1(house: LegacyHouse): HouseState {
+function migrateV1(house: LegacyHouse): LegacyHouse {
   const played = new Set(house.attempts.map((a) => `${a.kidId}:${a.moduleId}`));
-  const verdicts: Record<string, ModuleVerdict> = house.verdicts ?? {};
+  const verdicts: LegacyVerdicts = house.verdicts ?? {};
   const kids = house.kids.map((k) => {
     const starter = starterFor(k.id);
     const base: Child = {
@@ -76,7 +88,7 @@ function migrateV1(house: LegacyHouse): HouseState {
     const starterPath = new Set(starter?.path ?? []);
     const path = base.path.filter((id) => {
       if (!starterPath.has(id) || wanted.has(id) || played.has(`${k.id}:${id}`)) return true;
-      const verdict = verdicts[`${k.id}:${id}`];
+      const verdict = verdictOfLegacy(verdicts[`${k.id}:${id}`]);
       // A pass came from the map (or is done either way); open/fail means Rudy touched it.
       return verdict !== undefined && verdict !== "pass";
     });
@@ -87,6 +99,32 @@ function migrateV1(house: LegacyHouse): HouseState {
     version: 2,
     kids,
     scouts: house.scouts ?? [],
+  };
+}
+
+/**
+ * v2 → v3. Verdicts were bare words; now they say who set them. A stored pass
+ * on a module the kid never played belongs to the map (or Start here); any
+ * other stored verdict was the parent's. Sessions start empty; every kid gets
+ * a plan (review cards, proposals) with the path gate open.
+ */
+function migrateV2(house: LegacyHouse): LegacyHouse {
+  const played = new Set(house.attempts.filter((a) => a.source !== "placement").map((a) => `${a.kidId}:${a.moduleId}`));
+  const verdicts: Record<string, VerdictRecord> = {};
+  for (const [key, raw] of Object.entries(house.verdicts ?? {})) {
+    if (typeof raw !== "string") {
+      verdicts[key] = raw;
+      continue;
+    }
+    const by = raw === "pass" && !played.has(key) ? "map" : "parent";
+    verdicts[key] = { verdict: raw, by, at: "" };
+  }
+  return {
+    ...house,
+    version: 3,
+    verdicts,
+    sessions: house.sessions ?? [],
+    kids: house.kids.map((k) => ({ ...k, plan: k.plan ?? defaultPlan() })),
   };
 }
 
@@ -105,11 +143,14 @@ export function migrateHouse(raw: unknown): HouseState | null {
   if (!isHouseLike(raw)) return null;
   let house: LegacyHouse = raw;
   if (house.version === 1) house = migrateV1(house);
+  if (house.version === 2) house = migrateV2(house);
   if (house.version !== HOUSE_VERSION) return null;
-  const v2 = house as HouseState;
+  const v3 = house as HouseState;
   return withStarterLibrary({
-    ...v2,
-    kids: v2.kids.map((k) => ({ ...k, held: k.held ?? [], dailySessions: k.dailySessions ?? 0 })),
-    scouts: v2.scouts ?? [],
+    ...v3,
+    verdicts: v3.verdicts ?? {},
+    sessions: v3.sessions ?? [],
+    kids: v3.kids.map((k) => ({ ...k, held: k.held ?? [], dailySessions: k.dailySessions ?? 0, plan: { ...defaultPlan(), ...(k.plan ?? {}) } })),
+    scouts: v3.scouts ?? [],
   });
 }

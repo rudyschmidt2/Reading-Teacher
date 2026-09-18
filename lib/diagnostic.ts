@@ -502,7 +502,9 @@ export function bandStatus(band: Band, rows: DiagnosticRow[], total = band.probe
   const hits = real.filter((r) => r.ok).length;
   const denom = Math.max(1, total - (rows.length - real.length));
   if (hits >= Math.ceil(denom * 0.8) && (total < band.probes.length ? real.length >= 2 : true)) return "known";
-  if (hits >= 2 || hits / real.length >= 0.5) return "shaky";
+  // Shaky means half or better. Two hits alone only carry a short sample (an
+  // eight-probe letter band at 2/6 is not shaky, it is unknown).
+  if (hits / real.length >= 0.5 || (hits >= 2 && real.length <= 4)) return "shaky";
   return "unknown";
 }
 
@@ -673,12 +675,19 @@ export function shelfFor(track: Track, bands: BandReport[]): PlacementShelf {
 // Build the path from the map
 // ---------------------------------------------------------------------------
 
+/** Up to twelve items: one per focus bit first (so every bit in the title is taught), then seconds, then two review items. */
+export const TARGETED_CAP = 12;
+
 function targetedModule(kidId: string, band: Band, focus: string[], review: string[], stamp: string, prefix = "dx", title?: string): ModuleDef {
+  const perBit = focus.map((bit) => band.items(bit));
   const items: LessonItem[] = [];
-  for (const bit of focus) items.push(...band.items(bit));
+  const deepest = Math.max(0, ...perBit.map((list) => list.length));
+  for (let round = 0; round < deepest; round++) {
+    for (const list of perBit) if (list[round]) items.push(list[round]);
+  }
   for (const bit of review.slice(0, 2)) items.push(...band.items(bit).slice(0, 1));
   const seen = new Set<string>();
-  const unique = items.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true))).slice(0, 12);
+  const unique = items.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true))).slice(0, TARGETED_CAP);
   return {
     id: `${prefix}-${kidId}-${band.id}-${stamp}`,
     title: title || `${band.title}: ${focus.join(", ")}`,
@@ -793,6 +802,16 @@ export function buildPath(kidId: string, progress: DiagnosticProgress, reports: 
 
 const frontierOf = (reports: BandReport[]) => reports.find((b) => b.status !== "known" && b.status !== "not-reached")?.id;
 
+/** What the kid is told about the map: the last band they reached, never "the whole map" after two probes. */
+export function kidLineFor(track: Track, reports: BandReport[]): string {
+  const reached = reports.filter((b) => b.status !== "not-reached");
+  const last = reached[reached.length - 1];
+  const bands = bandsFor(track);
+  if (!last) return track === "letters" ? "You found the letter map!" : "You found the map!";
+  if (reached.length === bands.length) return track === "letters" ? "You beamed up every letter on the map!" : "You scouted the whole map!";
+  return `You found ${last.title.toLowerCase()} on the map!`;
+}
+
 export function finishDiagnostic(kidId: string, progress: DiagnosticProgress, stamp?: string): { report: DiagnosticReport; built: BuiltPath } {
   const reports = bandReports(progress);
   const builtPath = buildPath(kidId, progress, reports, stamp);
@@ -804,7 +823,7 @@ export function finishDiagnostic(kidId: string, progress: DiagnosticProgress, st
     shelf: shelfFor(progress.track, reports),
     note: describeMap(reports, progress.rows),
     pathNote: `Built ${builtPath.modules.length} targeted module${builtPath.modules.length === 1 ? "" : "s"}; ${builtPath.passed.length} bank module${builtPath.passed.length === 1 ? "" : "s"} marked passed.`,
-    kidLine: progress.track === "letters" ? "You beamed up every letter on the map!" : "You scouted the whole map!",
+    kidLine: kidLineFor(progress.track, reports),
     built: builtPath.built,
     speedMs: speedMs(progress.rows),
     readyForPrintWords: progress.track === "letters" ? printWordsReady("letters", reports) : undefined,

@@ -871,7 +871,7 @@ function SkillsMapCard({ child, onPractice }: { child: Child; onPractice: (band:
             type="button"
             className="chip px-4 py-2 text-sm"
             onClick={() => {
-              if (window.confirm(`Start ${child.name}'s skills map over? The path stays until the new map finishes.`)) house.restartDiagnostic(child.id);
+              if (window.confirm(`Map ${child.name} again? Dailies keep going; the map runs after them. The path stays until you accept the new one.`)) house.requestMap(child.id);
             }}
           >
             <RefreshIcon size={14} />
@@ -962,7 +962,7 @@ function ScoutCard({ kidId }: { kidId: string }) {
                 <CheckIcon size={12} />
                 Approve drafts
               </button>
-              <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "approved", true)}>
+              <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "approved", { ease: true })}>
                 Ease drafts
               </button>
               <button type="button" className="chip" onClick={() => house.resolveScout(kidId, "ignored")}>

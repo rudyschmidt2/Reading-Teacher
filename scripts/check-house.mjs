@@ -10,7 +10,8 @@ const riley = () => STARTER_KIDS.find((k) => k.id === "riley");
 
 // Empty house.
 const fresh = emptyHouse();
-check("empty house is on the current version", fresh.version === HOUSE_VERSION && HOUSE_VERSION === 2);
+check("empty house is on the current version", fresh.version === HOUSE_VERSION && HOUSE_VERSION === 3);
+check("empty house has sessions and a plan per kid", Array.isArray(fresh.sessions) && fresh.kids.every((k) => k.plan && k.plan.gate === "path"));
 check("empty house carries every starter module", fresh.modules.length === STARTER_MODULES.length);
 check("loading the empty house twice changes nothing", same(reload(reload(fresh)), reload(fresh)));
 
@@ -55,7 +56,7 @@ check("Start here held the earlier bank modules", plan.passed.every((id) => refr
 const v1 = JSON.parse(JSON.stringify({ ...fresh, version: 1 }));
 for (const k of v1.kids) delete k.held;
 const m1 = migrateHouse(v1);
-check("v1 migrates to v2", m1 && m1.version === 2);
+check("v1 migrates all the way to the current version", m1 && m1.version === HOUSE_VERSION);
 check("v1 kids get an empty held list", m1.kids.every((k) => Array.isArray(k.held) && k.held.length === 0));
 check("v1 paths are kept as saved", same(m1.kids.map((k) => k.path), v1.kids.map((k) => k.path)));
 check("migrated house is stable across loads", same(reload(m1), reload(reload(m1))));
@@ -93,6 +94,19 @@ check("v1 repair leaves a module Rudy graded alone", (() => {
   return migrateHouse(graded).kids.find((k) => k.id === "riley").path.includes("rh-silent-e");
 })());
 check("v1 repair does not touch an unmapped kid's path", same(migrateHouse(inflated).kids.find((k) => k.id === "hudson").path, riley().path));
+
+// v2 → v3: bare verdicts gain provenance; sessions and plans appear.
+const v2house = JSON.parse(JSON.stringify({ ...fresh, version: 2, verdicts: { "riley:rh-letters": "pass", "riley:rh-cvc-smash": "open", "hudson:rh-digraphs": "pass" }, attempts: [{ id: "a", kidId: "hudson", moduleId: "rh-digraphs", itemId: "x", version: 0, kind: "tap", dimension: "words", correct: true, ms: 1, at: "", kidSaw: "star", source: "daily" }] }));
+delete v2house.sessions;
+for (const k of v2house.kids) delete k.plan;
+const m2 = migrateHouse(v2house);
+check("v2 migrates to v3", m2 && m2.version === 3);
+check("v2: a pass nobody played is the map's", m2.verdicts["riley:rh-letters"].verdict === "pass" && m2.verdicts["riley:rh-letters"].by === "map");
+check("v2: a pass on a module the kid played was the parent's", m2.verdicts["hudson:rh-digraphs"].by === "parent");
+check("v2: an open verdict was the parent's", m2.verdicts["riley:rh-cvc-smash"].verdict === "open" && m2.verdicts["riley:rh-cvc-smash"].by === "parent");
+check("v2: sessions start empty and every kid gets a plan", Array.isArray(m2.sessions) && m2.kids.every((k) => k.plan && Array.isArray(k.plan.review) && Array.isArray(k.plan.proposals)));
+check("v2 → v3 is stable across loads", same(reload(m2), reload(reload(m2))));
+check("v3 verdict records survive a reload untouched", reload(m2).verdicts["riley:rh-letters"].by === "map");
 
 // Library still back-fills; the path does not.
 const missingLib = { ...fresh, modules: fresh.modules.slice(1) };

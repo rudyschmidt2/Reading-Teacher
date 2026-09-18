@@ -1,13 +1,4 @@
-import {
-  BANK_MODULES,
-  MY_STARTER_PATH,
-  PLACEMENT_A_CVC,
-  PLACEMENT_A_LETTERS,
-  PLACEMENT_A_SOUNDS,
-  PLACEMENT_B_NAMES,
-  PLACEMENT_B_SOUNDS,
-  RH_STARTER_PATH,
-} from "./banks.ts";
+import { BANK_MODULES, MY_STARTER_PATH, RH_STARTER_PATH } from "./banks.ts";
 import type {
   Child,
   GradeDimension,
@@ -18,18 +9,7 @@ import type {
   Vowel,
 } from "./types";
 
-export {
-  BANK_MODULES,
-  MY_STARTER_PATH,
-  PLACEMENT_A_CVC,
-  PLACEMENT_A_LETTERS,
-  PLACEMENT_A_SOUNDS,
-  PLACEMENT_B_NAMES,
-  PLACEMENT_B_SOUNDS,
-  RH_STARTER_PATH,
-  SCOUT_MY1,
-  SCOUT_RH1,
-} from "./banks.ts";
+export { BANK_MODULES, MY_STARTER_PATH, RH_STARTER_PATH, SCOUT_MY1, SCOUT_RH1 } from "./banks.ts";
 export { pathForPlacement } from "./banks.ts";
 
 export const THEMES: {
@@ -283,19 +263,6 @@ function letterName(letter: string, decoys: string[]): LessonItem {
   };
 }
 
-function letterSound(letter: string, phoneme: string, decoys: string[]): LessonItem {
-  return {
-    id: `sound-${letter}`,
-    kind: "tap",
-    widget: "ear",
-    prompt: `Which letter says ${phoneme}?`,
-    dimension: "phonemes",
-    letter,
-    choices: [letter, ...decoys].map((l) => ({ id: l, label: l })),
-    correctId: letter,
-    speakTarget: phoneme,
-  };
-}
 
 function letterDrag(letter: string, decoys: string[]): LessonItem {
   const tiles = [letter, ...decoys].map(letterTile);
@@ -319,25 +286,6 @@ function letterDrag(letter: string, decoys: string[]): LessonItem {
   };
 }
 
-function soundDrag(letter: string, phoneme: string): LessonItem {
-  return {
-    id: `drag-sound-${letter}`,
-    kind: "drag",
-    widget: "ear",
-    prompt: `Which sound is ${phoneme}?`,
-    dimension: "phonemes",
-    letter,
-    tiles: [soundTile(letter, phoneme), soundTile("x", "/m/"), soundTile("y", "/t/")],
-    slots: [
-      {
-        id: `ear-${letter}`,
-        accepts: ["sound"],
-        correctTileId: `s-${letter}`,
-      },
-    ],
-    speakTarget: phoneme,
-  };
-}
 
 function speakLetter(letter: string, mode: "name" | "sound"): LessonItem {
   const phoneme = letter === "a" ? "/ă/" : `/${letter}/`;
@@ -354,11 +302,6 @@ function speakLetter(letter: string, mode: "name" | "sound"): LessonItem {
 
 export const STARTER_MODULES: ModuleDef[] = BANK_MODULES;
 
-export const TRACK_A_SOUNDS = PLACEMENT_A_SOUNDS;
-export const TRACK_A_LETTERS = PLACEMENT_A_LETTERS;
-export const TRACK_A_CVC = PLACEMENT_A_CVC;
-export const TRACK_B_NAMES = PLACEMENT_B_NAMES;
-export const TRACK_B_SOUNDS = PLACEMENT_B_SOUNDS;
 
 export const DIMENSION_LABEL: Record<GradeDimension, string> = {
   letterRecognition: "Letter recognition",
