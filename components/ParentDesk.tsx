@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceLastError, voiceStatus } from "@/lib/audio";
 import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
-import { bandReports, bandsFor, progressSummary } from "@/lib/diagnostic";
+import { bandReports, bandsFor, practicePrefill, progressSummary, speedLine, type PracticePrefill } from "@/lib/diagnostic";
 import { allDimensions, kidNextModule, moduleStats, rollupDimension, verdictKey, type DimensionStatus } from "@/lib/grades";
 import { scoutDueReason } from "@/lib/scout";
 import { useHouse } from "@/lib/store";
-import type { BandStatus, Child, ModuleVerdict, Stretch } from "@/lib/types";
+import type { BandReport, BandStatus, Child, ModuleVerdict, Stretch } from "@/lib/types";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -93,12 +94,12 @@ function KidSelect({ selected, onPick }: { selected?: string; onPick: (id: strin
 }
 
 function VoiceCard() {
-  const [muted, setMuted] = useState(false);
+  // Rendered only after the house has loaded on the client, so the mute flag is safe to read once.
+  const [muted, setMuted] = useState(isVoiceMuted);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [hearNote, setHearNote] = useState<string | null>(null);
 
   useEffect(() => {
-    setMuted(isVoiceMuted());
     void voiceStatus().then((status) => setConfigured(status.configured));
   }, []);
 
@@ -193,20 +194,32 @@ function AddChild() {
   );
 }
 
+function DeskLoading() {
+  return (
+    <main className="parent-desk flex min-h-dvh items-center justify-center p-6">
+      <p className="chip px-4 py-2 text-sm">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+        Loading desk…
+      </p>
+    </main>
+  );
+}
+
 export function ParentHome() {
+  return (
+    <Suspense fallback={<DeskLoading />}>
+      <ParentHomeInner />
+    </Suspense>
+  );
+}
+
+function ParentHomeInner() {
   const { state, ready } = useHouse();
-  const [id, setId] = useState(state.kids[0]?.id ?? "riley");
+  const params = useSearchParams();
+  const wanted = params.get("kid");
+  const [id, setId] = useState(wanted && state.kids.some((k) => k.id === wanted) ? wanted : state.kids[0]?.id ?? "riley");
   const child = state.kids.find((k) => k.id === id) ?? state.kids[0];
-  if (!ready) {
-    return (
-      <main className="parent-desk flex min-h-dvh items-center justify-center p-6">
-        <p className="chip px-4 py-2 text-sm">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
-          Loading desk…
-        </p>
-      </main>
-    );
-  }
+  if (!ready) return <DeskLoading />;
   return (
     <main className="parent-desk px-4 py-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
@@ -258,6 +271,15 @@ export function ChildDesk({ child }: { child: Child }) {
   const theme = THEMES.find((t) => t.id === child.themeToday);
   const idx = Math.max(0, house.state.kids.findIndex((k) => k.id === child.id));
   const [a, b] = AVATAR[idx % AVATAR.length];
+  // "Practice these" on the Skills map drops the band's missed bits into the Create-a-module form.
+  const [prefill, setPrefill] = useState<(PracticePrefill & { nonce: number }) | null>(null);
+  const practice = (band: BandReport) => {
+    const def = bandsFor(child.track).find((x) => x.id === band.id);
+    if (!def) return;
+    setPrefill({ ...practicePrefill(def, band.missed), nonce: Date.now() });
+    window.setTimeout(() => document.getElementById("create-module")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+  };
+  const scoutReady = child.track === "letters" ? child.readyForPrintWords : undefined;
 
   return (
     <section className="mt-4 space-y-4">
@@ -278,6 +300,11 @@ export function ChildDesk({ child }: { child: Child }) {
                   <StarIcon size={10} />
                   {child.stars}
                 </span>
+                {scoutReady !== undefined && child.status === "active" ? (
+                  <span className={`badge ${scoutReady ? "badge--good" : "badge--muted"}`} data-scout-ready={scoutReady ? "1" : "0"}>
+                    {scoutReady ? "Scout says ready for words" : "Scout says: letters and sounds"}
+                  </span>
+                ) : null}
               </div>
               <dl className="mt-3 grid gap-1 text-sm text-slate-300">
                 <div className="flex gap-2">
@@ -376,7 +403,7 @@ export function ChildDesk({ child }: { child: Child }) {
             </div>
           </Card>
 
-          <SkillsMapCard child={child} />
+          <SkillsMapCard child={child} onPractice={practice} />
           <LastSession childId={child.id} />
           <ScoutCard kidId={child.id} />
           <PathEditor child={child} />
@@ -405,19 +432,22 @@ export function ChildDesk({ child }: { child: Child }) {
             </ul>
           </Card>
 
-          <CreateModule child={child} />
+          <CreateModule key={prefill?.nonce ?? "blank"} child={child} prefill={prefill ?? undefined} />
 
-          {child.id === "myles" ? (
-            <Card title="Myles word unlock" icon={<LockIcon size={18} />} sub="Needs probe ready_for_print_words AND your confirm.">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-indigo-400"
-                  checked={child.readyForPrintWords}
-                  onChange={(e) => house.setReadyForPrintWords(child.id, e.target.checked)}
-                />
-                Probe flag ready_for_print_words
-              </label>
+          {child.id === "myles" || child.track === "letters" ? (
+            <Card title={`${child.name} word unlock`} icon={<LockIcon size={18} />} sub="Needs the scout flag ready_for_print_words AND your confirm.">
+              <p className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                <span className={`badge ${child.readyForPrintWords ? "badge--good" : "badge--muted"}`}>
+                  {child.readyForPrintWords ? "Scout says ready" : "Scout says not yet"}
+                </span>
+                <span className="text-slate-400">
+                  {child.readyForPrintWords
+                    ? "Letter sounds and first sounds are both known on the map."
+                    : child.diagnosticReport
+                      ? "Set by the skills map: letter sounds and first sounds must both be known. Map again to re-check."
+                      : "Set by the skills map once letter sounds and first sounds are both known."}
+                </span>
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
@@ -586,10 +616,13 @@ function PathEditor({ child }: { child: Child }) {
                 </span>
                 <span className="flex gap-1">
                   {!child.path.includes(m.id) ? (
-                    <button type="button" className="chip" onClick={() => house.setPath(child.id, [...child.path, m.id])}>
-                      <PlusIcon size={12} />
-                      Add
-                    </button>
+                    <>
+                      {child.held?.includes(m.id) ? <span className="badge badge--muted">held</span> : null}
+                      <button type="button" className="chip" onClick={() => house.setPath(child.id, [...child.path, m.id])}>
+                        <PlusIcon size={12} />
+                        {child.held?.includes(m.id) ? "Put back" : "Add"}
+                      </button>
+                    </>
                   ) : (
                     <span className="badge badge--info">on path</span>
                   )}
@@ -612,24 +645,31 @@ function PathEditor({ child }: { child: Child }) {
   );
 }
 
-function CreateModule({ child }: { child: Child }) {
+function CreateModule({ child, prefill }: { child: Child; prefill?: PracticePrefill }) {
   const house = useHouse();
-  const [title, setTitle] = useState("");
-  const [skill, setSkill] = useState("");
-  const [seeds, setSeeds] = useState(child.track === "letters" ? "s, a, t" : "sat, pin");
+  const [title, setTitle] = useState(prefill?.title ?? "");
+  const [skill, setSkill] = useState(prefill?.skill ?? "");
+  const [seeds, setSeeds] = useState(prefill?.seeds ?? (child.track === "letters" ? "s, a, t" : "sat, pin"));
+  const [bandId, setBandId] = useState(prefill?.bandId);
+  const [made, setMade] = useState<string | null>(null);
   const lockedWords = !wordsUnlocked(child);
+  const bandTitle = bandId ? bandsFor(child.track).find((b) => b.id === bandId)?.title : undefined;
   return (
     <form
-      className="desk-card p-5"
+      id="create-module"
+      className={`desk-card scroll-mt-4 p-5 ${prefill ? "ring-2 ring-indigo-400/60" : ""}`}
       onSubmit={(e) => {
         e.preventDefault();
-        house.createAndAssign(child.id, {
+        const mod = house.createAndAssign(child.id, {
           title,
           skill,
           track: lockedWords ? "letters" : child.track,
           seeds,
+          bandId,
         });
+        setMade(mod ? `${mod.title} is on ${child.name}'s path (${mod.items.length} items).` : "Nothing to build from those seeds.");
         setTitle("");
+        setBandId(undefined);
       }}
     >
       <header className="mb-3 flex items-start gap-3">
@@ -639,19 +679,37 @@ function CreateModule({ child }: { child: Child }) {
         <div>
           <h3 className="text-lg font-black text-white">Create a module from results</h3>
           <p className="text-sm text-slate-400">
-            {lockedWords ? "Myles stays in letters/sounds until unlock." : "Seeds become tap, drag, and speak items."}
+            {bandTitle
+              ? `Practice set from the map: ${bandTitle}. Built with that band's own tap, drag, and speak items.`
+              : lockedWords
+                ? "Myles stays in letters/sounds until unlock."
+                : "Seeds become tap, drag, and speak items."}
           </p>
         </div>
       </header>
+      {bandTitle ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="badge badge--info" data-prefill-band={bandId}>
+            from map · {bandTitle}
+          </span>
+          <button type="button" className="chip" onClick={() => setBandId(undefined)}>
+            <XIcon size={12} />
+            Plain seeds instead
+          </button>
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <input className="desk-input" placeholder="Module name" value={title} onChange={(e) => setTitle(e.target.value)} />
         <input className="desk-input" placeholder="Skill target" value={skill} onChange={(e) => setSkill(e.target.value)} />
       </div>
-      <textarea className="desk-input mt-3 min-h-20" value={seeds} onChange={(e) => setSeeds(e.target.value)} />
-      <button className="chip chip--on mt-3 px-4 py-2 text-sm" type="submit">
-        <SparklesIcon size={14} />
-        Create and put on path
-      </button>
+      <textarea className="desk-input mt-3 min-h-20" value={seeds} onChange={(e) => setSeeds(e.target.value)} aria-label="Seeds" />
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button className="chip chip--on min-h-11 px-4 py-2 text-sm" type="submit">
+          <SparklesIcon size={14} />
+          Create and put on path
+        </button>
+        {made ? <span className="text-sm text-emerald-200">{made}</span> : null}
+      </div>
     </form>
   );
 }
@@ -663,61 +721,132 @@ function bandBadge(status: BandStatus) {
   return "badge badge--muted";
 }
 
-function SkillsMapCard({ child }: { child: Child }) {
+function SkillsMapCard({ child, onPractice }: { child: Child; onPractice: (band: BandReport) => void }) {
   const house = useHouse();
   const report = child.diagnosticReport;
   const progress = child.diagnostic;
-  const bands = report ? report.bands : progress ? bandReports(progress) : bandsFor(child.track).map((b) => ({ id: b.id, title: b.title, status: "not-reached" as BandStatus, hits: 0, answered: 0, total: b.probes.length, known: [], missed: [] }));
+  const defs = bandsFor(child.track);
+  const bands: BandReport[] = report
+    ? report.bands
+    : progress
+      ? bandReports(progress)
+      : defs.map((b) => ({ id: b.id, title: b.title, status: "not-reached" as BandStatus, hits: 0, answered: 0, total: b.probes.length, known: [], missed: [] }));
   const summary = progress ? progressSummary(progress) : undefined;
   const state = report ? "done" : progress ? "running" : "fresh";
-  const scoutingId = state === "running" && progress?.cursor ? bandsFor(child.track)[progress.cursor.band]?.id : undefined;
+  const scoutingId = state === "running" && progress?.cursor ? defs[progress.cursor.band]?.id : undefined;
+  const speed = speedLine(report?.speedMs);
   const sub =
     state === "done"
-      ? `Finished ${report?.at.slice(0, 10)}. Path below was built from this map.`
+      ? `Finished ${report?.at.slice(0, 10)}. The path below started from this map; Start here moves it.`
       : state === "running"
         ? `In progress: ${summary?.answered} probes answered, on ${summary?.bandTitle ?? "the next band"}. Resumes at the next theme pick.`
-        : "Not started. The kid gets it before the first daily session. Tap-only, in their skin, stops at the frontier.";
+        : "Not started. The kid gets it before the first daily session. Tap and say, in their skin, stops at the frontier.";
+
+  // A link from the grading page lands here.
+  useEffect(() => {
+    if (window.location.hash === "#skills-map") {
+      document.getElementById("skills-map")?.scrollIntoView({ block: "start" });
+    }
+  }, []);
+
+  const startAt = (b: BandReport) => {
+    const def = defs.find((d) => d.id === b.id);
+    if (!def) return;
+    if (window.confirm(`Start ${child.name}'s path at ${def.title}? Earlier bank modules are marked passed and the path rebuilds from here. Modules you made by hand stay.`)) {
+      house.startPathAt(child.id, b.id);
+    }
+  };
 
   return (
-    <Card title="Skills map" icon={<CompassIcon size={18} />} sub={sub}>
-      {report ? <p className="mb-3 text-sm text-slate-300">{report.note}</p> : null}
-      <ul className="grid gap-2 md:grid-cols-2">
-        {bands.map((b) => (
-          <li key={b.id} className="desk-tile p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-bold text-white">{b.title}</p>
-              {b.id === scoutingId ? <span className="badge badge--info">scouting</span> : <span className={bandBadge(b.status)}>{b.status.replace("-", " ")}</span>}
-            </div>
-            {b.answered > 0 ? (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="stat-bar flex-1">
-                  <span style={{ width: `${Math.round((b.hits / b.total) * 100)}%` }} />
-                </span>
-                <span className="text-xs font-bold text-slate-400">
-                  {b.hits}/{b.answered}
-                  {b.answered < b.total ? ` of ${b.total}` : ""}
-                </span>
-              </div>
+    <div id="skills-map" className="scroll-mt-4">
+      <Card title="Skills map" icon={<CompassIcon size={18} />} sub={sub}>
+        {report ? (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5 text-sm">
+            <span className="badge badge--info">shelf {report.shelf}</span>
+            {report.frontier ? <span className="badge badge--warn">frontier: {bands.find((b) => b.id === report.frontier)?.title ?? report.frontier}</span> : <span className="badge badge--good">no frontier</span>}
+            {speed ? (
+              <span className="badge badge--muted" data-speed={report.speedMs}>
+                <ClockIcon size={10} />
+                speed {speed}
+              </span>
             ) : (
-              <p className="mt-1 text-xs text-slate-500">{b.total} probes</p>
+              <span className="badge badge--muted">speed: no timed hits</span>
             )}
-            {b.missed.length || b.known.length ? (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {b.missed.map((bit, i) => (
-                  <span key={`m-${bit}-${i}`} className="badge badge--bad">
-                    {bit}
-                  </span>
-                ))}
-                {b.known.map((bit, i) => (
-                  <span key={`k-${bit}-${i}`} className="badge badge--good">
-                    {bit}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+          </div>
+        ) : null}
+        {report ? <p className="mb-1 text-sm text-slate-300">{report.note}</p> : null}
+        {report?.pathNote ? <p className="mb-3 text-sm text-slate-400">{report.pathNote}</p> : null}
+        <ul className="grid gap-2 md:grid-cols-2">
+          {bands.map((b) => {
+            const def = defs.find((d) => d.id === b.id);
+            const reached = b.status !== "not-reached" || b.answered > 0;
+            return (
+              <li key={b.id} className="desk-tile p-3" data-band={b.id} data-status={b.status}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-white">{b.title}</p>
+                  {b.id === scoutingId ? <span className="badge badge--info">scouting</span> : <span className={bandBadge(b.status)}>{b.status.replace("-", " ")}</span>}
+                </div>
+                {b.answered > 0 ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="stat-bar flex-1">
+                      <span style={{ width: `${Math.round((b.hits / Math.max(1, b.total)) * 100)}%` }} />
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      {b.hits}/{b.answered}
+                      {b.answered < b.total ? ` of ${b.total}` : ""}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">{b.total} probes</p>
+                )}
+                {reached && (b.avgMs !== undefined || b.speak) ? (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                    {b.avgMs !== undefined ? (
+                      <span className="inline-flex items-center gap-1 text-cyan-300" data-band-speed={b.avgMs}>
+                        <ClockIcon size={11} />
+                        {speedLine(b.avgMs)}
+                      </span>
+                    ) : null}
+                    {b.speak ? (
+                      <span className={`inline-flex items-center gap-1 ${b.speak.pending ? "text-amber-200" : b.speak.hits ? "text-emerald-300" : "text-rose-300"}`}>
+                        <MicIcon size={11} />
+                        {b.speak.pending ? "said it · waits for your ear" : b.speak.hits ? "said it" : "could not say it"}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {b.missed.length || b.known.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {b.missed.map((bit, i) => (
+                      <span key={`m-${bit}-${i}`} className="badge badge--bad">
+                        {bit}
+                      </span>
+                    ))}
+                    {b.known.map((bit, i) => (
+                      <span key={`k-${bit}-${i}`} className="badge badge--good">
+                        {bit}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {def?.bankModule && child.status === "active" ? (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-white/5 pt-2.5">
+                    <button type="button" className="chip min-h-9 text-xs" onClick={() => startAt(b)} data-start-here={b.id}>
+                      <PlayIcon size={11} />
+                      Start here
+                    </button>
+                    {b.missed.length ? (
+                      <button type="button" className="chip chip--indigo min-h-9 text-xs" onClick={() => onPractice(b)} data-practice={b.id}>
+                        <PlusIcon size={11} />
+                        Practice these ({b.missed.length})
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       {report?.built.length ? (
         <div className="mt-4">
           <p className="text-sm font-bold text-white">Built for {child.name}</p>
@@ -750,7 +879,8 @@ function SkillsMapCard({ child }: { child: Child }) {
           </button>
         ) : null}
       </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
@@ -794,12 +924,30 @@ function ScoutCard({ kidId }: { kidId: string }) {
             <span className="badge badge--info">Pack {report.pack}</span>
             <span className="badge badge--muted">ceiling {report.ceiling}</span>
             <span className="badge badge--muted">floor {report.floor}</span>
+            {report.answered !== undefined ? (
+              <span className="badge badge--muted" data-scout-hits={report.hits ?? 0}>
+                {report.hits ?? 0}/{report.answered} hits
+              </span>
+            ) : null}
+            {report.at ? <span className="badge badge--muted">{report.at.slice(0, 10)}</span> : null}
             <span className={`badge ${report.status === "approved" ? "badge--good" : report.status === "pending" ? "badge--warn" : "badge--muted"}`}>{report.status}</span>
           </div>
+          {child?.track === "letters" ? (
+            <p className="mt-2 text-sm text-slate-300">
+              {report.readyForPrintWords ? "Scout says ready for print words." : "Scout says: letters and sounds still. Words wait for the map or the next scout."}
+            </p>
+          ) : null}
           <ul className="mt-3 flex flex-wrap gap-1.5 text-sm">
             {report.bands.map((b) => (
-              <li key={b.name} className="desk-tile px-3 py-1.5 text-slate-200">
+              <li key={b.id ?? b.name} className="desk-tile px-3 py-1.5 text-slate-200" data-scout-band={b.id}>
                 {b.name}: <span className={b.tag === "known" ? "text-emerald-300" : b.tag === "shaky" ? "text-amber-300" : "text-slate-400"}>{b.tag}</span>
+                {b.answered !== undefined ? (
+                  <span className="text-slate-500">
+                    {" "}
+                    {b.hits ?? 0}/{b.answered}
+                  </span>
+                ) : null}
+                {b.missed?.length ? <span className="text-rose-300"> · missed {b.missed.join(", ")}</span> : null}
               </li>
             ))}
           </ul>

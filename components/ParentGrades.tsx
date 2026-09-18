@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ageFromBirthday } from "@/lib/catalog";
+import { bandsForModule, speedLine } from "@/lib/diagnostic";
 import {
   MODULE_STATUS_LABEL,
   moduleFunctionGrades,
@@ -15,7 +16,7 @@ import {
   type ModuleProgress,
 } from "@/lib/grades";
 import { useHouse } from "@/lib/store";
-import type { Child, ModuleDef, ModuleVerdict } from "@/lib/types";
+import type { BandReport, Child, ModuleDef, ModuleVerdict } from "@/lib/types";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -26,8 +27,18 @@ import {
   MicIcon,
   PlayIcon,
   PlusIcon,
+  TelescopeIcon,
   XIcon,
 } from "@/components/Icons";
+
+/** Where a kid stands on the skills map, in the words the desk uses. */
+function mapLine(child: Child): { shelf?: string; frontier?: string; state: "waiting" | "none" | "running" | "done" } {
+  if (child.status === "waiting") return { state: "waiting" };
+  const report = child.diagnosticReport;
+  if (!report) return { state: child.diagnostic ? "running" : "none" };
+  const band = report.frontier ? report.bands.find((b) => b.id === report.frontier) : undefined;
+  return { state: "done", shelf: report.shelf, frontier: band ? band.title : report.frontier ? report.frontier : undefined };
+}
 
 const AVATAR: [string, string][] = [
   ["#f59e0b", "#ec4899"],
@@ -171,6 +182,7 @@ function GradesInner() {
         <p className="mt-2 text-sm text-slate-400">Every module, every function, every kid. Real numbers only. Tap a module for the full sheet.</p>
 
         <KidStrip kids={kids} filter={filter} onPick={setFilter} />
+        <MapStrip kids={shown} />
 
         {groups.map((g) => (
           <section key={g.id} className="mt-6" aria-labelledby={`group-${g.id}`}>
@@ -217,6 +229,8 @@ function KidStrip({ kids, filter, onPick }: { kids: Child[]; filter: string | nu
         else {
           const passed = k.path.filter((id) => state.verdicts[verdictKey(k.id, id)] === "pass").length;
           sub = k.path.length ? `${passed}/${k.path.length} passed` : "no path yet";
+          const map = mapLine(k);
+          if (map.state === "done") sub += ` · ${map.shelf}${map.frontier ? ` · ${map.frontier}` : ""}`;
         }
         return (
           <button
@@ -243,6 +257,80 @@ function KidStrip({ kids, filter, onPick }: { kids: Child[]; filter: string | nu
 }
 
 /* ---------------------------------------------------------------------------
+   Kids on the map: shelf, frontier, speed, and the way to the Skills map
+--------------------------------------------------------------------------- */
+
+function MapStrip({ kids }: { kids: Child[] }) {
+  const { state } = useHouse();
+  return (
+    <section className="mt-5" aria-labelledby="map-strip">
+      <h2 id="map-strip" className="text-lg font-black text-white">
+        Kids on the map
+      </h2>
+      <p className="text-xs text-slate-500">Shelf and frontier come from the skills map. Start here and Practice these live on the desk.</p>
+      <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
+        {kids.map((k) => {
+          const idx = Math.max(0, state.kids.findIndex((x) => x.id === k.id));
+          const map = mapLine(k);
+          const report = k.diagnosticReport;
+          const speed = speedLine(report?.speedMs);
+          return (
+            <li key={k.id} className="desk-card p-4" data-map-kid={k.id} data-map-state={map.state}>
+              <div className="flex items-start gap-3">
+                <Avatar child={k} idx={idx} size="h-10 w-10 text-sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-black text-white">
+                    {k.name}
+                    {map.state === "done" ? <span className="badge badge--info">shelf {map.shelf}</span> : null}
+                    {map.state === "waiting" ? (
+                      <span className="badge badge--muted">
+                        <LockIcon size={10} />
+                        waiting
+                      </span>
+                    ) : null}
+                  </p>
+                  {map.state === "done" ? (
+                    <>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {map.frontier ? (
+                          <>
+                            Frontier: <span className="font-bold text-amber-200">{map.frontier}</span>
+                          </>
+                        ) : (
+                          <span className="font-bold text-emerald-200">Every band probed is known</span>
+                        )}
+                        <span className="text-slate-500"> · mapped {report?.at.slice(0, 10)}</span>
+                      </p>
+                      <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-bold text-cyan-300">
+                        <ClockIcon size={11} />
+                        {speed ?? "no timed hits yet"}
+                      </p>
+                    </>
+                  ) : map.state === "running" ? (
+                    <p className="mt-1 text-sm text-slate-400">Map in progress. It resumes at the next theme pick.</p>
+                  ) : map.state === "none" ? (
+                    <p className="mt-1 text-sm text-slate-400">Not mapped yet. The first session is the map.</p>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-400">No map, no path, nothing made up.</p>
+                  )}
+                </div>
+              </div>
+              {map.state !== "waiting" ? (
+                <Link href={`/parent?kid=${k.id}#skills-map`} className="chip mt-3 min-h-11 px-3 text-sm" data-map-link={k.id}>
+                  <TelescopeIcon size={14} />
+                  {map.state === "done" ? "Skills map · Start here" : "Skills map"}
+                  <ArrowRightIcon size={14} />
+                </Link>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------------------
    Module card
 --------------------------------------------------------------------------- */
 
@@ -261,6 +349,7 @@ function ModuleCard({ module, kids, onOpen }: { module: ModuleDef; kids: Child[]
           <span className="text-base font-black text-white">{module.title}</span>
           {module.custom ? <span className="badge badge--info">custom</span> : null}
           {module.id.startsWith("dx-") ? <span className="badge badge--info">from map</span> : null}
+          {module.id.startsWith("pr-") ? <span className="badge badge--info">practice</span> : null}
         </span>
         <span className="mt-0.5 block text-sm text-slate-400">{module.skill}</span>
         <span className="mt-3 grid gap-1.5">
@@ -421,6 +510,7 @@ function KidSheet({ child, module, idx }: { child: Child; module: ModuleDef; idx
       ) : (
         <>
           <OverallRow progress={progress} />
+          <MapResult child={child} module={module} />
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {grades.map((g) => (
               <li key={g.key}>
@@ -435,6 +525,38 @@ function KidSheet({ child, module, idx }: { child: Child; module: ModuleDef; idx
         </>
       )}
     </section>
+  );
+}
+
+/** What the skills map said about the band(s) this module teaches. Nothing when the kid has no map or the module is not a band's. */
+function MapResult({ child, module }: { child: Child; module: ModuleDef }) {
+  const report = child.diagnosticReport;
+  if (!report) return null;
+  const bands = bandsForModule(report.track, module.id, child.id);
+  const results = bands.map((b) => report.bands.find((r) => r.id === b.id)).filter((r): r is BandReport => Boolean(r) && r!.status !== "not-reached");
+  if (!results.length) return null;
+  return (
+    <ul className="mt-3 grid gap-2" data-map-result={module.id}>
+      {results.map((r) => (
+        <li key={r.id} className="grade-tile p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-black text-white">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-lime-200">On the map · </span>
+              {r.title}
+            </p>
+            <span className={sheetBadge(r.status === "known" ? "passed" : r.status === "shaky" ? "struggle-stop" : "failed")}>{r.status}</span>
+          </div>
+          <p className="mt-1.5 text-xs font-bold text-emerald-50/85">
+            {r.hits}/{r.answered} probes hit
+            {r.answered < r.total ? ` of ${r.total}` : ""}
+            {r.missed.length ? ` · missed ${r.missed.join(", ")}` : ""}
+            {r.avgMs !== undefined ? ` · ${speedLine(r.avgMs)}` : ""}
+            {r.speak?.pending ? ` · ${r.speak.pending} spoken waiting for your ear` : ""}
+            {report.frontier === r.id ? " · the frontier" : ""}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }
 
