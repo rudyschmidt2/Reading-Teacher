@@ -336,7 +336,7 @@ function DragBoard({ item, onDone, themeId }: { item: LessonItem; onDone: (ok: b
               className={`slot flex h-20 w-20 items-center justify-center text-3xl font-black ${slots.length > 3 ? "max-w-[22vw]" : ""} ${state}`}
               style={slot.glowVowel ? { boxShadow: `inset 0 0 0 5px ${VOWEL_FACE[slot.glowVowel].color}` } : undefined}
             >
-              {tile ? tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label : i === focus ? <ArrowDownIcon size={32} className="animate-bounce text-white/90" /> : ""}
+              {tile ? tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label : i === focus ? <ArrowDownIcon size={32} className="motion-safe:animate-bounce text-white/90" /> : ""}
             </button>
           );
         })}

@@ -35,6 +35,12 @@ npm run build && npm run smoke   # phone-width Playwright run against the built 
 BASE_URL=https://<deploy> npm run smoke   # same run against a live deploy
 ```
 
+## How a kid keeps learning
+
+`lib/plan.ts` is the loop, and it is pure. Place → learn the **active** module (first unpassed module on the path) → pass it (8 of the last 10 cold tries right and 60% of its items hit) → it joins spaced review (2 / 5 / 12 / 30 / 60 days) → the next path module goes active. A daily session is: warm-up review cards → stretch on the active module (rotating through unplayed cards, shaped by that module's stretch knob) → at least one speak step → one known card held back to end on a real win. When the path runs out the kid plays a **victory lap** (review only) and the desk Inbox gets a **proposal** — next band from the map, ease after two stalled sessions, harden when coasting, refresh when review slips, unlock words when Myles's rule fires, the new path after a re-map. The engine never writes the path; only a parent tap on a proposal, the Path editor, Start here, or Practice these does. "Ask me before each new module" turns even following the path into a proposal.
+
+The house record is `reading-teacher-v2` in localStorage, version 3 (`lib/house.ts` migrates 1 → 2 → 3). Verdicts say who set them (auto / parent / map / start-here); every sitting is logged in `sessions`; each kid carries a `plan` (review cards, proposals, gate, per-module stretch). Copy / paste house lives under the desk's **Set** segment.
+
 ## Voiceover
 
 Lesson prompts and letter sounds use a natural neural teacher voice (OpenAI `gpt-4o-mini-tts`, voice `marin`, uncompressed `wav`) — warm and clear for Riley (7), Hudson (6), and Myles (3). Phonemes are spoken as short English (`sss`, `a as in apple`), not letter-runs. Browser `speechSynthesis` is not used; it muffled phonemes.
@@ -65,7 +71,7 @@ Hear a prompt and `/s/` from the parent desk Voiceover card to check clarity.
 The microphone is off except on a speak step (repeat a word, repeat a sentence, read aloud).
 
 - Tap / drag / trace: do the move. The mic stays off. Tap **Again** to hear the line again.
-- Speak items: the teacher finishes the prompt, then the ear opens once. The orb says “I'm listening.” Wrong word is an honest miss; silence just closes the ear (“Tap to talk” opens it again). Saying **what** or **again** replays the prompt and the ear opens once more after it.
+- Speak items: the teacher finishes the prompt, then the ear opens once. The orb says “Listening…”. Wrong word is an honest miss; the prompt replays and the ear opens once more after it. Silence just closes the ear (“Say it” opens it again). Saying **what** or **again** replays the prompt and the ear opens once more after it.
 - The ear never restarts on its own, never listens while the teacher talks, and closes when the child leaves the step.
 - **Again** on the bottom toolbar (and the big prompt) play the line again. Hold **That's enough** there to finish.
 - If the browser blocks the mic the orb says “Allow the mic” once; tap it after allowing.
