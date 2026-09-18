@@ -1,4 +1,5 @@
 import { STARTER_KIDS, STARTER_MODULES } from "./catalog.ts";
+import { buildPath } from "./diagnostic.ts";
 import type { Child, HouseState, ModuleDef, ModuleVerdict } from "./types";
 
 /**
@@ -46,12 +47,12 @@ function starterFor(id: string) {
 
 /**
  * v1 → v2. Version 1 re-added every starter module to every kid's path on
- * every load, so a v1 path already holds the whole starter list. The step
- * removes the modules that inflation put back after the skills map had
- * passed them (a pass verdict, not something the map built, not something
- * the kid played), starts the held list, and stamps the version. Starter
- * modules missing from the library are still added — that is the library,
- * not the path.
+ * every load, so a mapped kid's v1 path holds the whole starter list on top
+ * of what the map built. The step rebuilds what the map would place (same
+ * bank modules; the dx- ids are already on the path) and moves every other
+ * starter module that nobody played and nobody graded onto `held`, where the
+ * library shows it with "Put back". Starter modules missing from the library
+ * are still added — that is the library, not the path.
  */
 function migrateV1(house: LegacyHouse): HouseState {
   const played = new Set(house.attempts.map((a) => `${a.kidId}:${a.moduleId}`));
@@ -66,11 +67,18 @@ function migrateV1(house: LegacyHouse): HouseState {
       dailySessions: k.dailySessions ?? 0,
     } as Child;
     if (!k.diagnosticReport) return { ...base, held: base.held ?? [] };
-    const built = new Set(k.diagnosticReport.built.map((b) => b.moduleId));
+    const wanted = new Set<string>(k.diagnosticReport.built.map((b) => b.moduleId));
+    if (k.diagnostic) {
+      for (const id of buildPath(k.id, k.diagnostic, k.diagnosticReport.bands, "migrate").path) {
+        if (!id.startsWith("dx-")) wanted.add(id);
+      }
+    }
     const starterPath = new Set(starter?.path ?? []);
     const path = base.path.filter((id) => {
-      const passedByMap = verdicts[`${k.id}:${id}`] === "pass" && !built.has(id) && starterPath.has(id) && !played.has(`${k.id}:${id}`);
-      return !passedByMap;
+      if (!starterPath.has(id) || wanted.has(id) || played.has(`${k.id}:${id}`)) return true;
+      const verdict = verdicts[`${k.id}:${id}`];
+      // A pass came from the map (or is done either way); open/fail means Rudy touched it.
+      return verdict !== undefined && verdict !== "pass";
     });
     return withPath({ ...base, held: base.held ?? [] }, path);
   });

@@ -3,7 +3,7 @@
  * needs a built app and a browser, so the merge queue does not run it.
  *
  *   npm run build && npm run smoke            # starts `next start` on :3123
- *   BASE_URL=https://reading-teacher.vercel.app npm run smoke
+ *   BASE_URL=https://temporary-rushing-oxygen-gbzsbdg.vercel.app npm run smoke
  *   SHOTS=/tmp/shots npm run smoke            # where the 390px screenshots go
  *
  * What it proves, in order: three-choice probes show all three cards above

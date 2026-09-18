@@ -1,9 +1,9 @@
 import { STARTER_KIDS, STARTER_MODULES } from "../lib/catalog.ts";
-import { bandsFor, startHere } from "../lib/diagnostic.ts";
+import { answerProbe, bandsFor, currentProbe, finishDiagnostic, startDiagnostic, startHere } from "../lib/diagnostic.ts";
 import { HOUSE_VERSION, emptyHouse, migrateHouse, withPath } from "../lib/house.ts";
 
 const checks = [];
-const check = (name, ok) => checks.push([name, ok]);
+const check = (name, ok, detail = "") => checks.push([name, ok, detail]);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const reload = (house) => migrateHouse(JSON.parse(JSON.stringify(house)));
 const riley = () => STARTER_KIDS.find((k) => k.id === "riley");
@@ -60,32 +60,39 @@ check("v1 kids get an empty held list", m1.kids.every((k) => Array.isArray(k.hel
 check("v1 paths are kept as saved", same(m1.kids.map((k) => k.path), v1.kids.map((k) => k.path)));
 check("migrated house is stable across loads", same(reload(m1), reload(reload(m1))));
 
-// v1 repair: a map-built path that v1 inflated back to the whole starter list.
-const mapBuilt = ["rh-digraphs", "dx-riley-digraphs-t1", "rh-blends"];
+// v1 repair: the audit's live case. Riley's map built a 5-module path; v1's
+// load() then back-filled every starter module on top of it.
+let rileyMap = startDiagnostic("words", new Date("2026-09-14T00:00:00Z"));
+while (rileyMap.cursor) {
+  const pr = currentProbe(rileyMap);
+  const ok = ["first-sounds", "letter-names", "letter-sounds", "short-vowels", "cvc"].includes(pr.band) || (pr.band === "digraphs" && (pr.bit === "sh" || pr.bit === "ch"));
+  rileyMap = answerProbe(rileyMap, pr, ok, 900, new Date("2026-09-14T00:00:01Z"));
+}
+const rileyDone = finishDiagnostic("riley", rileyMap, "t1");
+const mapPath = rileyDone.built.path;
+const inflatedPath = [...mapPath, ...riley().path.filter((id) => !mapPath.includes(id))];
 const inflated = JSON.parse(JSON.stringify({
   ...fresh,
   version: 1,
-  modules: [...fresh.modules, { id: "dx-riley-digraphs-t1", title: "x", track: "words", skill: "", stretch: "stretch-hard", dimensions: [], items: [] }],
-  verdicts: { "riley:rh-letters": "pass", "riley:rh-cvc-smash": "pass", "riley:rh-heart": "pass" },
-  kids: fresh.kids.map((k) =>
-    k.id === "riley"
-      ? {
-          ...k,
-          path: [...mapBuilt, ...k.path.filter((id) => !mapBuilt.includes(id))],
-          diagnosticReport: { track: "words", at: "2026-09-18", bands: [], shelf: "C", note: "", kidLine: "", built: [{ moduleId: "dx-riley-digraphs-t1", title: "x", why: "" }] },
-        }
-      : k,
-  ),
+  modules: [...fresh.modules, ...rileyDone.built.modules],
+  verdicts: Object.fromEntries(rileyDone.built.passed.map((id) => [`riley:${id}`, "pass"])),
+  kids: fresh.kids.map((k) => (k.id === "riley" ? { ...k, path: inflatedPath, diagnostic: rileyMap, diagnosticReport: rileyDone.report } : k)),
 }));
+for (const k of inflated.kids) delete k.held;
+check("fixture: the map path is 5 modules and v1 inflated it past 10", mapPath.length === 5 && inflatedPath.length > 10);
 const repaired = migrateHouse(inflated).kids.find((k) => k.id === "riley");
-check("v1 repair drops the map-passed bank modules the back-fill put back", !repaired.path.includes("rh-letters") && !repaired.path.includes("rh-cvc-smash") && !repaired.path.includes("rh-heart"));
-check("v1 repair keeps the map-built modules in order", repaired.path.slice(0, 3).join() === mapBuilt.join());
-check("v1 repair keeps unpassed starter modules (they may be the parent's)", repaired.path.some((id) => !mapBuilt.includes(id)));
-check("v1 repair records the dropped ones as held", ["rh-letters", "rh-cvc-smash", "rh-heart"].every((id) => repaired.held.includes(id)));
-check("v1 repair leaves a played passed module alone", (() => {
-  const withPlay = { ...inflated, attempts: [{ id: "a", kidId: "riley", moduleId: "rh-heart", itemId: "x", version: 0, kind: "tap", dimension: "words", correct: true, ms: 1, at: "", kidSaw: "star", source: "daily" }] };
-  return migrateHouse(withPlay).kids.find((k) => k.id === "riley").path.includes("rh-heart");
+check("v1 repair brings the path back to exactly what the map built, in order", repaired.path.join() === mapPath.join(), repaired.path.join());
+check("v1 repair records every module it took off as held", inflatedPath.filter((id) => !mapPath.includes(id)).every((id) => repaired.held.includes(id)));
+check("v1 repair is stable on the next load", same(reload(migrateHouse(inflated)).kids.find((k) => k.id === "riley").path, mapPath));
+check("v1 repair leaves a module the kid played alone", (() => {
+  const withPlay = { ...inflated, attempts: [{ id: "a", kidId: "riley", moduleId: "rh-endings", itemId: "x", version: 0, kind: "tap", dimension: "words", correct: true, ms: 1, at: "", kidSaw: "star", source: "daily" }] };
+  return migrateHouse(withPlay).kids.find((k) => k.id === "riley").path.includes("rh-endings");
 })());
+check("v1 repair leaves a module Rudy graded alone", (() => {
+  const graded = { ...inflated, verdicts: { ...inflated.verdicts, "riley:rh-silent-e": "open" } };
+  return migrateHouse(graded).kids.find((k) => k.id === "riley").path.includes("rh-silent-e");
+})());
+check("v1 repair does not touch an unmapped kid's path", same(migrateHouse(inflated).kids.find((k) => k.id === "hudson").path, riley().path));
 
 // Library still back-fills; the path does not.
 const missingLib = { ...fresh, modules: fresh.modules.slice(1) };
@@ -98,7 +105,7 @@ check("a non-house record is rejected", migrateHouse({ hello: 1 }) === null && m
 check("a newer version is rejected instead of guessed at", migrateHouse({ ...fresh, version: 99 }) === null);
 
 const failed = checks.filter(([, ok]) => !ok);
-for (const [name, ok] of checks) if (!ok || process.argv.includes("-v")) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
+for (const [name, ok, detail] of checks) if (!ok || process.argv.includes("-v")) console.log(`${ok ? "PASS" : "FAIL"} ${name}${!ok && detail ? ` — ${detail}` : ""}`);
 if (failed.length) {
   console.error(`\n${failed.length} house checks failed`);
   process.exit(1);
