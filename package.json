@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check": "for f in scripts/check-*.mjs; do node --experimental-strip-types \"$f\" || exit 1; done",
+    "smoke": "node --experimental-strip-types scripts/smoke.mjs",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "worktree": "bash scripts/worktree.sh",
     "sync": "bash scripts/sync-main.sh",
@@ -24,6 +26,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

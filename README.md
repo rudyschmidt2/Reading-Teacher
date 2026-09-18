@@ -2,7 +2,7 @@
 
 Phonics-first site for Riley (7), Hudson (6), Myles (3), and Cassidy (1, waiting).
 
-Kids pick a face, smash today’s theme, take placement, then play tap / drag / speak adventures. Honest miss: “not that one.” Stars only on real hits. Parent desk holds grades, speed, pass/fail, and the create / reorder / ease / harden loop.
+Kids pick a face, smash today’s theme, take the skills map (tap **and** say — every band ends with a read-aloud probe, and speed is measured on real hits), then play tap / drag / speak adventures. Honest miss: “not that one.” Stars only on real hits. Parent desk holds grades, speed, pass/fail, the Skills map with **Start here** and **Practice these** per band, and the create / reorder / ease / harden loop. `/parent/grades` shows each kid's shelf and frontier.
 
 ## Run
 
@@ -27,6 +27,13 @@ npm run sync                       # merge origin/main in before pushing
 ```
 
 Push the branch, open a PR, and the [merge queue](.github/workflows/merge-queue.yml) updates it with `main`, builds it, and merges it. Details in [AGENTS.md](AGENTS.md).
+
+```bash
+npm run lint                 # zero errors
+npm run check                # every scripts/check-*.mjs (the queue runs these too)
+npm run build && npm run smoke   # phone-width Playwright run against the built app; SHOTS=dir for screenshots
+BASE_URL=https://<deploy> npm run smoke   # same run against a live deploy
+```
 
 ## Voiceover
 
@@ -79,7 +86,7 @@ The app manifest starts at the kids door. A service worker caches repeated voice
 | --- | --- | --- |
 | Riley | 7 | Phonics / words |
 | Hudson | 6 | Same ladder, own pace |
-| Myles | 3 | Letters and sounds only until unlock |
+| Myles | 3 | Letters and sounds until the map says letter sounds + first sounds are known **and** Rudy confirms |
 | Cassidy | 1 | Waiting. No lessons. |
 
 Daily themes (kid-picked): large animals, airplanes, planets and space, bugs, spaceships, farming and equipment (trucks, choppers, wheat, silage, corn, tractors, implements, cars), race cars.
