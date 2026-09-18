@@ -1,10 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { RefreshIcon } from "@/components/Icons";
 
 const STAMP = process.env.NEXT_PUBLIC_BUILD_STAMP ?? "";
 const POLL_MS = 60_000;
+
+export const BUILD_STAMP = STAMP || "dev";
 
 async function hardRefresh() {
   try {
@@ -24,8 +27,7 @@ async function hardRefresh() {
   }
 }
 
-export function RefreshBar() {
-  const [busy, setBusy] = useState(false);
+function useFreshBuild() {
   const [fresh, setFresh] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,20 +61,39 @@ export function RefreshBar() {
     };
   }, []);
 
+  return fresh;
+}
+
+/** Parent door: the build strip. Kid door: nothing, unless a new version is live — then one toast. */
+export function RefreshBar() {
+  const pathname = usePathname();
+  const [busy, setBusy] = useState(false);
+  const fresh = useFreshBuild();
+  const parent = pathname?.startsWith("/parent");
+
+  const refresh = () => {
+    setBusy(true);
+    void hardRefresh();
+  };
+
+  if (!parent) {
+    if (!fresh) return null;
+    return (
+      <div className="toast rise-in" role="status">
+        <button type="button" className="toast__button" disabled={busy} onClick={refresh}>
+          <RefreshIcon size={14} className={busy ? "animate-spin" : ""} />
+          {busy ? "Refreshing…" : "New version — tap to update"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={`refresh-bar ${fresh ? "refresh-bar--fresh" : ""}`} role="region" aria-label="App version">
       <span className="refresh-bar__stamp" title={fresh ? `Live: ${fresh}` : undefined}>
-        {fresh ? "New version is live" : STAMP || "dev"}
+        {fresh ? "New version is live" : BUILD_STAMP}
       </span>
-      <button
-        type="button"
-        className="refresh-bar__button"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          void hardRefresh();
-        }}
-      >
+      <button type="button" className="refresh-bar__button" disabled={busy} onClick={refresh}>
         <RefreshIcon size={14} className={busy ? "animate-spin" : ""} />
         {busy ? "Refreshing…" : fresh ? "Refresh to update" : "Hard refresh"}
       </button>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallHint } from "@/components/Pwa";
+import { HoldToOpen, OfflinePill } from "@/components/ui";
 import {
   phonemeHint,
   speak,
@@ -15,14 +16,7 @@ import {
   useMicBlocked,
   useTeacherTalking,
 } from "@/lib/audio";
-import {
-  SCOUT_MY1,
-  SCOUT_RH1,
-  THEMES,
-  VOWEL_FACE,
-  themeOf,
-  wordsUnlocked,
-} from "@/lib/catalog";
+import { SCOUT_MY1, SCOUT_RH1, THEMES, VOWEL_FACE, themeOf } from "@/lib/catalog";
 import { elapsedMs, nowMs, todayStamp } from "@/lib/clock";
 import {
   PAUSED_KID_LINE,
@@ -35,40 +29,40 @@ import {
   type ScoutRow,
 } from "@/lib/diagnostic";
 import { dealChoices, dealTiles } from "@/lib/deal";
+import { planOf } from "@/lib/house";
+import { activeModule, buildSession, leadOrder, usableFor, type Session, type SessionEntry } from "@/lib/plan";
 import { paintChoices, paintCorrectId, sittingHost, skinMiss, skinWin, trayHint } from "@/lib/theme-skins";
-import { kidNextModule } from "@/lib/grades";
 import { nextSameSkill } from "@/lib/skip-stuck";
 import { useHouse } from "@/lib/store";
-import { tripSessionLength } from "@/lib/trip";
 import type {
+  AttemptSource,
   Child,
   Choice,
+  HouseState,
   LessonItem,
+  ModuleDef,
   PlacementItem,
   PlayKind,
+  SessionResult,
   ThemeId,
   Tile,
-  Track,
   Vowel,
   Widget,
 } from "@/lib/types";
 import {
   ArrowDownIcon,
-  ArrowRightIcon,
-  BoltIcon,
   CheckIcon,
   HandIcon,
   LockIcon,
   MicIcon,
   SparklesIcon,
   HomeIcon,
-  ShieldIcon,
   SpeakerIcon,
   StarIcon,
   TelescopeIcon,
 } from "@/components/Icons";
 
-/** Today's date, read once per mount so render stays pure. Sessions are minutes long, not days. */
+/** Today's local date, read once per mount so render stays pure. Sessions are minutes long, not days. */
 function useToday() {
   const [day] = useState(todayStamp);
   return day;
@@ -76,15 +70,15 @@ function useToday() {
 
 const CONFETTI_COLORS = ["#fde047", "#f472b6", "#22d3ee", "#a3e635", "#fb923c", "#c084fc", "#ffffff"];
 
-function Confetti({ count = 18 }: { count?: number }) {
+function Confetti({ count = 12 }: { count?: number }) {
   return (
     <span className="confetti" aria-hidden>
       {Array.from({ length: count }, (_, k) => {
         const angle = (k / count) * Math.PI * 2;
-        const dist = 90 + (k % 3) * 40;
+        const dist = 80 + (k % 3) * 36;
         const style = {
           "--x": `${Math.cos(angle) * dist}px`,
-          "--y": `${Math.sin(angle) * dist - 30}px`,
+          "--y": `${Math.sin(angle) * dist - 24}px`,
           "--c": CONFETTI_COLORS[k % CONFETTI_COLORS.length],
           "--d": `${(k % 4) * 40}ms`,
         } as CSSProperties;
@@ -94,27 +88,37 @@ function Confetti({ count = 18 }: { count?: number }) {
   );
 }
 
-function HonestBanner({ text, party }: { text: string; party?: boolean }) {
+type Tone = "win" | "quiet" | "miss" | "note";
+type Banner = { text: string; tone: Tone };
+
+/** Win is gold with confetti; a same-card retry is a quiet gold; a miss is white ("not that one"). Never red. */
+function HonestBanner({ banner }: { banner: Banner }) {
+  const cls = banner.tone === "win" ? "party banner--win text-card" : banner.tone === "quiet" ? "banner--quiet text-title" : banner.tone === "note" ? "banner--miss text-title" : "wobble banner--miss text-title";
   return (
-    <div role="status" className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-50 mx-auto max-w-lg">
-      <div className={`banner relative text-3xl ${party ? "party banner--win" : "wobble banner--miss"}`}>
-        {party ? <Confetti /> : null}
+    <div role="status" className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-50 mx-auto max-w-lg" data-banner={banner.tone}>
+      <div className={`banner relative ${cls}`}>
+        {banner.tone === "win" ? <Confetti /> : null}
         <span className="relative inline-flex items-center justify-center gap-3">
-          {party ? <SparklesIcon size={28} className="shrink-0" /> : null}
-          {text}
+          {banner.tone === "win" ? <SparklesIcon size={26} className="shrink-0" /> : null}
+          {banner.text}
         </span>
       </div>
     </div>
   );
 }
 
-function Dots({ total, current }: { total: number; current: number }) {
-  if (total <= 1) return null;
+function Dots({ total, current, label }: { total: number; current: number; label?: string }) {
+  if (total <= 1 && !label) return null;
   return (
-    <div className="dots mt-3" aria-label={`Step ${Math.min(current + 1, total)} of ${total}`}>
-      {Array.from({ length: total }, (_, k) => (
-        <span key={k} className={`dot ${k < current ? "dot--done" : k === current ? "dot--now" : ""}`} />
-      ))}
+    <div className="mt-2 flex items-center justify-center gap-3" aria-label={`Step ${Math.min(current + 1, total)} of ${total}`}>
+      {total > 1 ? (
+        <span className="dots">
+          {Array.from({ length: Math.min(total, 9) }, (_, k) => (
+            <span key={k} className={`dot ${k < current ? "dot--done" : k === current ? "dot--now" : ""}`} />
+          ))}
+        </span>
+      ) : null}
+      {label ? <span className="text-label font-extrabold uppercase tracking-[0.08em] text-white/82">{label}</span> : null}
     </div>
   );
 }
@@ -122,7 +126,7 @@ function Dots({ total, current }: { total: number; current: number }) {
 function coachLine(kind?: PlayKind, widget?: Widget, ear?: { listening: boolean; blocked: boolean; talking: boolean }) {
   if (kind === "speak") {
     if (ear?.blocked) return "Allow the microphone, then tap the ear.";
-    if (ear?.listening) return "I'm listening. Just say it.";
+    if (ear?.listening) return "Listening. Just say it.";
     if (ear?.talking) return "Listen first…";
     return "Your turn. Tap the ear and say it.";
   }
@@ -131,27 +135,18 @@ function coachLine(kind?: PlayKind, widget?: Widget, ear?: { listening: boolean;
   return "Tap one.";
 }
 
-function PromptCard({
-  eyebrow,
-  prompt,
-  kind,
-  widget,
-}: {
-  eyebrow?: string;
-  prompt: string;
-  kind?: PlayKind;
-  widget?: Widget;
-}) {
+/** The one line the kid reads, straight on the stage. Tapping it replays the teacher. */
+function Prompt({ eyebrow, prompt, kind, widget }: { eyebrow?: string; prompt: string; kind?: PlayKind; widget?: Widget }) {
   const listening = useListening();
   const blocked = useMicBlocked();
   const talking = useTeacherTalking();
   return (
-    <section className="glass rise-in mx-auto mt-4 max-w-lg rounded-[28px] px-5 py-5 text-center">
-      {eyebrow ? <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/70">{eyebrow}</p> : null}
-      <button type="button" onClick={() => speak(prompt)} className="display title-pop mt-1 w-full text-4xl leading-tight">
+    <section className="rise-in mx-auto mt-3 w-full max-w-lg text-center">
+      {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+      <button type="button" onClick={() => speak(prompt)} className="prompt title-pop mt-2" aria-label={`Hear it again: ${prompt}`}>
         {prompt}
       </button>
-      <p className="mt-3 text-lg font-black text-white">{coachLine(kind, widget, { listening, blocked, talking })}</p>
+      <p className="coach">{coachLine(kind, widget, { listening, blocked, talking })}</p>
     </section>
   );
 }
@@ -159,38 +154,20 @@ function PromptCard({
 function VowelFace({ vowel }: { vowel: Vowel }) {
   const face = VOWEL_FACE[vowel];
   return (
-    <span
-      className={`inline-flex h-16 min-w-16 items-center justify-center rounded-2xl text-3xl font-black shadow-[0_4px_0_rgb(0_0_0/0.25)] vowel-${vowel}`}
-      title={`${face.name} ${face.sound}`}
-    >
+    <span className={`inline-flex h-14 min-w-14 items-center justify-center rounded-2xl text-3xl font-black shadow-[0_4px_0_rgb(0_0_0/0.25)] vowel-${vowel}`} title={`${face.name} ${face.sound}`}>
       {vowel}
       <sup className="ml-1 text-lg">{face.mark}</sup>
     </span>
   );
 }
 
-function TileChip({
-  tile,
-  onPick,
-}: {
-  tile: Tile;
-  onPick: () => void;
-}) {
-  if (tile.kind === "vowel" && tile.vowel) {
-    return (
-      <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-24 min-w-24 flex-col items-center justify-center p-2 sm:min-h-28 sm:min-w-28 sm:p-3">
-        <VowelFace vowel={tile.vowel} />
-        {tile.label.length > 1 ? <span className="text-3xl font-black">{tile.label.slice(1)}</span> : null}
-        <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">
-          {tile.label.length > 1 ? tile.label : VOWEL_FACE[tile.vowel].sound}
-        </span>
-      </button>
-    );
-  }
+function TileChip({ tile, onPick }: { tile: Tile; onPick: () => void }) {
+  const sub = tile.kind === "vowel" && tile.vowel ? (tile.label.length > 1 ? tile.label : VOWEL_FACE[tile.vowel].sound) : tile.kind === "sound" ? "sound" : undefined;
   return (
-    <button type="button" onClick={onPick} className="fat-card bounce-in flex min-h-24 min-w-24 flex-col items-center justify-center p-2 text-4xl font-black sm:min-h-28 sm:min-w-28 sm:p-3">
-      {tile.label}
-      {tile.kind === "sound" ? <span className="mt-1 text-xs font-extrabold uppercase tracking-wider opacity-60">sound</span> : null}
+    <button type="button" onClick={onPick} className="fat-card tile bounce-in flex min-h-[5.5rem] min-w-[5.5rem] flex-col items-center justify-center p-2 text-3xl font-black" aria-label={`tile ${tile.label}`}>
+      {tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label}
+      {tile.kind === "vowel" && tile.label.length > 1 ? <span className="text-2xl font-black">{tile.label.slice(1)}</span> : null}
+      {sub ? <span className="mt-1 text-micro font-extrabold uppercase tracking-wider opacity-70">{sub}</span> : null}
     </button>
   );
 }
@@ -213,23 +190,27 @@ function ChoiceGrid({
   shaken?: string;
 }) {
   const { dealt, correctSlot } = useMemo(() => dealChoices(choices, correctId, seed, avoidSlot), [choices, correctId, seed, avoidSlot]);
-  // Phone: three cards deal 2 + 1 (the odd card spans the row) so all three sit
-  // above the dock without scrolling. Wider screens get one row of three.
-  const three = dealt.length === 3;
-  const long = dealt.some((c) => c.label.length > 6);
+  // Phones: three short answers sit in one row of three; long answers (a
+  // sentence) stack as three wide rows; four answers are 2 × 2. Everything
+  // stays above the dock either way.
+  const longest = Math.max(...dealt.map((c) => c.label.length));
+  const stacked = longest > 8;
+  const cols = dealt.length > 3 ? "grid-cols-2" : stacked ? "grid-cols-1" : "grid-cols-3";
+  const textSize = stacked ? "text-title" : longest > 5 ? "text-title" : "text-card";
   return (
-    <div className={`grid gap-3 sm:gap-4 ${dealt.length > 3 || three ? "grid-cols-2" : "grid-cols-1"} ${three ? "sm:grid-cols-3" : ""}`} data-choices={dealt.length}>
+    <div className={`grid gap-3 ${cols}`} data-choices={dealt.length}>
       {dealt.map((c, k) => (
         <button
           key={c.id}
           type="button"
           onClick={() => onPick(c.id, correctSlot)}
-          className={`fat-card flex min-h-[7.25rem] flex-col items-center justify-center gap-1.5 p-3 font-black sm:min-h-36 sm:gap-2 sm:p-4 ${
-            long ? "text-2xl sm:text-3xl" : "text-4xl"
-          } ${three && k === 2 ? "col-span-2 sm:col-span-1" : ""} ${shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 7)}`}`}
+          aria-label={c.label}
+          className={`fat-card flex flex-col items-center justify-center gap-1 p-2 font-black ${stacked ? "min-h-[4.5rem] flex-row justify-start gap-3 px-4 text-left" : "min-h-[8rem]"} ${textSize} ${
+            shaken === c.id ? "wobble" : `bounce-in stagger-${Math.min(k + 1, 4)}`
+          }`}
         >
-          {c.emoji ? <span className="emoji-3d text-5xl sm:text-6xl">{c.emoji}</span> : null}
-          <span className={c.emoji ? "text-xl sm:text-2xl" : ""}>{c.label}</span>
+          {c.emoji ? <span className={`emoji-3d ${stacked ? "text-3xl" : "text-[2.75rem]"}`} aria-hidden>{c.emoji}</span> : null}
+          <span className={c.emoji && !stacked ? "text-body font-black" : ""}>{c.label}</span>
         </button>
       ))}
     </div>
@@ -240,27 +221,29 @@ function ChoiceGrid({
 function PrintCard({ text }: { text: string }) {
   const long = text.length > 8;
   return (
-    <div className="glass-strong rise-in mx-auto mb-5 flex min-h-[6.5rem] max-w-lg items-center justify-center rounded-[28px] px-5 py-4 text-center" data-print={text}>
-      <span className={`display leading-none text-white ${long ? "text-4xl sm:text-5xl" : "text-7xl sm:text-8xl"}`}>{text}</span>
+    <div className="glass-strong rise-in mx-auto mb-4 flex min-h-[6rem] w-full max-w-lg items-center justify-center rounded-[var(--r-lg)] px-5 py-4 text-center" data-print={text}>
+      <span className={`display leading-none text-white ${long ? "text-hero" : "text-7xl"}`}>{text}</span>
     </div>
   );
 }
 
-function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) => void }) {
+/** Tracing cannot be graded; the button only opens once the pad was touched, and a trace is never a miss. */
+function TracePad({ letter, onDone }: { letter: string; onDone: () => void }) {
   const [marks, setMarks] = useState(0);
   const traced = marks > 3;
   return (
     <div className="space-y-4">
       <button
         type="button"
-        className="glass-strong relative mx-auto flex h-60 w-full max-w-sm select-none flex-col items-center justify-center overflow-hidden rounded-[32px] text-white"
+        className="glass-strong relative mx-auto flex h-52 w-full max-w-sm select-none flex-col items-center justify-center overflow-hidden rounded-[var(--r-lg)] text-white"
         onPointerMove={(e) => {
           if (e.buttons) setMarks((n) => n + 1);
         }}
         onClick={() => setMarks((n) => n + 4)}
+        aria-label={`Trace ${letter}`}
       >
         <span
-          className="display pointer-events-none text-[9rem] leading-none text-transparent transition-all"
+          className="display pointer-events-none text-[8rem] leading-none text-transparent transition-all"
           style={{
             WebkitTextStroke: traced ? "0px" : "3px rgb(255 255 255 / 0.9)",
             color: traced ? "white" : "transparent",
@@ -269,16 +252,12 @@ function TracePad({ letter, onDone }: { letter: string; onDone: (ok: boolean) =>
         >
           {letter}
         </span>
-        <span className="absolute bottom-4 inline-flex items-center gap-2 rounded-full bg-black/25 px-3 py-1.5 text-sm font-extrabold">
+        <span className="absolute bottom-3 inline-flex items-center gap-2 rounded-full bg-black/25 px-3 py-1.5 text-label font-extrabold">
           <HandIcon size={16} />
           {traced ? "Nice tracing!" : `Trace ${letter} with your finger`}
         </span>
       </button>
-      <button
-        type="button"
-        className="btn-glow mx-auto flex items-center gap-2 px-7 py-3.5 text-xl font-black"
-        onClick={() => onDone(marks > 3)}
-      >
+      <button type="button" className="btn-glow mx-auto flex min-h-14 items-center gap-2 px-7 py-3 text-title font-black disabled:opacity-60" disabled={!traced} onClick={onDone}>
         <CheckIcon size={22} />
         I traced it
       </button>
@@ -291,7 +270,7 @@ function SpeakPanel({ onParent }: { onParent: () => void }) {
   const blocked = useMicBlocked();
   const talking = useTeacherTalking();
   const heard = useHeard();
-  const label = blocked ? "Allow the mic" : listening ? "I'm listening" : talking ? "Listen…" : "Tap to talk";
+  const label = blocked ? "Allow the mic" : listening ? "Listening…" : talking ? "Listen…" : "Say it";
   return (
     <div className="flex flex-col items-center gap-4">
       <button
@@ -299,35 +278,26 @@ function SpeakPanel({ onParent }: { onParent: () => void }) {
         onClick={tapEar}
         aria-pressed={listening}
         aria-label={listening ? "Stop listening" : "Start listening"}
-        className={`orb orb-ring h-40 w-40 flex-col gap-1 text-white ${listening ? "glow-pulse" : talking ? "opacity-60" : ""}`}
-        style={{ ["--orb-a" as string]: "#fb7185", ["--orb-b" as string]: "#e11d48" }}
+        className={`orb orb-ring h-[8.25rem] w-[8.25rem] flex-col gap-1 text-white ${listening ? "glow-pulse" : talking ? "opacity-60" : ""}`}
       >
-        <MicIcon size={56} />
-        <span className="text-lg font-black" aria-live="polite">
+        <MicIcon size={52} />
+        <span className="text-body font-black" aria-live="polite">
           {label}
         </span>
       </button>
       {heard ? (
-        <p className="glass rounded-full px-4 py-2 text-lg">
+        <p className="glass rounded-full px-4 py-2 text-body">
           Heard: <span className="font-black">{heard}</span>
         </p>
       ) : null}
-      <button type="button" onClick={onParent} className="btn-ghost px-5 py-3 text-lg font-bold">
+      <button type="button" onClick={onParent} className="btn-ghost min-h-12 px-5 py-3 text-body font-bold">
         Parent will listen
       </button>
     </div>
   );
 }
 
-function DragBoard({
-  item,
-  onDone,
-  themeId,
-}: {
-  item: LessonItem;
-  onDone: (ok: boolean) => void;
-  themeId?: ThemeId;
-}) {
+function DragBoard({ item, onDone, themeId }: { item: LessonItem; onDone: (ok: boolean) => void; themeId?: ThemeId }) {
   const [filled, setFilled] = useState<Record<string, Tile | undefined>>({});
   const [focus, setFocus] = useState(0);
   const [shake, setShake] = useState(false);
@@ -346,14 +316,14 @@ function DragBoard({
       if (slots.every((s) => next[s.id]?.id === s.correctTileId)) onDone(true);
     } else {
       setShake(true);
-      window.setTimeout(() => setShake(false), 450);
+      window.setTimeout(() => setShake(false), 300);
       onDone(false);
     }
   };
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div className={`flex justify-center gap-2 sm:gap-3 ${shake ? "wobble" : ""}`}>
+    <div className="space-y-4">
+      <div className={`flex justify-center gap-2 ${shake ? "wobble" : ""}`}>
         {slots.map((slot, i) => {
           const tile = filled[slot.id];
           const state = tile ? "slot--filled" : i === focus ? "slot--focus" : "";
@@ -362,26 +332,23 @@ function DragBoard({
               key={slot.id}
               type="button"
               onClick={() => setFocus(i)}
-              className={`slot flex h-20 w-20 items-center justify-center text-4xl font-black sm:h-28 sm:w-28 ${slots.length > 3 ? "max-w-[22vw]" : ""} ${state}`}
+              aria-label={`slot ${i + 1} of ${slots.length}, ${tile ? tile.label : "empty"}`}
+              className={`slot flex h-20 w-20 items-center justify-center text-3xl font-black ${slots.length > 3 ? "max-w-[22vw]" : ""} ${state}`}
               style={slot.glowVowel ? { boxShadow: `inset 0 0 0 5px ${VOWEL_FACE[slot.glowVowel].color}` } : undefined}
             >
-              {tile ? (
-                tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label
-              ) : i === focus ? (
-                <ArrowDownIcon size={36} className="animate-bounce text-white/90" />
-              ) : (
-                ""
-              )}
+              {tile ? tile.kind === "vowel" && tile.vowel ? <VowelFace vowel={tile.vowel} /> : tile.label : i === focus ? <ArrowDownIcon size={32} className="animate-bounce text-white/90" /> : ""}
             </button>
           );
         })}
       </div>
-      <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-        {tiles.filter((t) => !used.has(t.id)).map((tile) => (
-          <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
-        ))}
+      <div className="flex flex-wrap justify-center gap-2">
+        {tiles
+          .filter((t) => !used.has(t.id))
+          .map((tile) => (
+            <TileChip key={tile.id} tile={tile} onPick={() => drop(tile)} />
+          ))}
       </div>
-      <p className="mx-auto max-w-sm text-center text-sm font-bold text-white/70">{trayHint(themeId, slots.length)}</p>
+      <p className="mx-auto max-w-sm text-center text-body font-bold text-white/82">{trayHint(themeId, slots.length)}</p>
     </div>
   );
 }
@@ -403,13 +370,13 @@ function StageHeading({ eyebrow, title, sub }: { eyebrow?: string; title: string
   return (
     <header className="rise-in text-center">
       {eyebrow ? (
-        <span className="glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.18em] text-white/85">
+        <span className="eyebrow">
           <SparklesIcon size={14} className="text-amber-300" />
           {eyebrow}
         </span>
       ) : null}
-      <h1 className="display title-pop mt-3 text-5xl font-bold leading-none">{title}</h1>
-      {sub ? <p className="mt-3 text-lg font-bold text-white/80">{sub}</p> : null}
+      <h1 className="display title-pop mt-3 text-hero font-bold">{title}</h1>
+      {sub ? <p className="mt-2 text-body font-bold text-white/82">{sub}</p> : null}
     </header>
   );
 }
@@ -436,37 +403,40 @@ export function ThemePicker({ kidId }: { kidId: string }) {
   const choose = (id: ThemeId) => {
     pickTheme(kidId, id);
     speak(THEMES.find((t) => t.id === id)?.label ?? "Let's play");
+    // The first sitting is the skills map. A re-map runs after the daily, from the done page.
     if (!child.diagnosticReport) router.push(`/kids/${kidId}/place`);
     else router.push(`/kids/${kidId}/play`);
   };
 
   return (
-    <main className="kid-stage theme-planets-space px-4 py-8">
-      <StageHeading eyebrow={`${child.name}'s pick`} title="Today's skin" sub="Smash one. You can pick a different one tomorrow." />
-      <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4 md:max-w-3xl md:grid-cols-2">
+    <main className="kid-stage theme-planets-space px-4 py-6">
+      <OfflinePill />
+      <StageHeading eyebrow={`${child.name}'s pick`} title="Pick today's game" sub="Tomorrow you can pick a different one." />
+      <div className="mx-auto mt-5 grid max-w-lg grid-cols-2 gap-3 md:max-w-3xl md:grid-cols-4">
         {THEMES.map((t, k) => (
           <button
             key={t.id}
             type="button"
             onClick={() => choose(t.id)}
-            className={`fat-card rise-in stagger-${Math.min(k + 1, 7)} group relative flex items-center gap-4 overflow-hidden p-5 text-left theme-${t.id}`}
+            className={`fat-card rise-in stagger-${Math.min(k + 1, 4)} relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2 overflow-hidden p-3 theme-${t.id}`}
+            data-theme={t.id}
+            aria-label={t.label}
           >
-            <span className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full opacity-40 blur-2xl" style={{ background: "var(--accent)" }} />
-            <span className="orb h-20 w-20 shrink-0 text-5xl">
-              <span className="emoji-3d">{t.emoji}</span>
+            <span className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-40 blur-2xl" style={{ background: "var(--accent)" }} />
+            <span className="emoji-3d relative text-[2.75rem]" aria-hidden>
+              {t.emoji}
             </span>
-            <span className="relative min-w-0 flex-1">
-              <span className="display block text-2xl leading-none sm:text-3xl">{t.label}</span>
-              <span className="mt-1.5 block truncate text-sm font-extrabold uppercase tracking-wide opacity-60">{t.host}</span>
-              <span className="mt-1 block text-sm font-semibold leading-snug opacity-75">{t.flavor}</span>
-            </span>
-            <ArrowRightIcon size={26} className="shrink-0 opacity-40 transition-all group-hover:translate-x-1 group-hover:opacity-80" />
+            <span className="display relative block text-center text-body leading-tight">{t.label}</span>
           </button>
         ))}
       </div>
     </main>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Placement sitting
+// ---------------------------------------------------------------------------
 
 export function DiagnosticSession({ kidId }: { kidId: string }) {
   const house = useHouse();
@@ -479,53 +449,68 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   const band = progress ? currentBand(progress) : undefined;
   const summary = progress ? progressSummary(progress) : undefined;
 
-  const [banner, setBanner] = useState<string | null>(null);
-  const [party, setParty] = useState(false);
+  const [banner, setBanner] = useState<Banner | null>(null);
   const [shaken, setShaken] = useState<string>();
   const [locked, setLocked] = useState(false);
   const [retry, setRetry] = useState(false);
   const [lastSlot, setLastSlot] = useState<number>();
   const [leaving, setLeaving] = useState(false);
+  const [startedAt] = useState(() => new Date().toISOString());
   const sitting = useRef(0);
   const start = useRef(0);
+  const results = useRef<SessionResult[]>([]);
   const day = useToday();
 
   useEffect(() => {
     if (probe) speak(probe.prompt);
     start.current = nowMs();
     return () => stopSpeech();
-  }, [probe]);
+  }, [probe, retry]);
 
-  const ready = Boolean(house.ready && child && progress && !leaving && !child.diagnosticReport && probe);
+  // A record whose probes are all answered but never got a report: finish it instead of looping between /place and /play.
+  const stuck = Boolean(house.ready && child && progress && !progress.cursor && !child.diagnosticReport);
+  useEffect(() => {
+    if (stuck) house.completeDiagnostic(kidId);
+  }, [stuck, kidId, house]);
+
+  const remap = Boolean(child && planOf(child).mapRequested && progress?.cursor);
+  const ready = Boolean(house.ready && child && progress && !leaving && (!child.diagnosticReport || remap) && probe);
   const isSpeak = ready && probe?.kind === "speak";
   const seed = `${kidId}-${day}`;
 
-  const leave = (line: string, finished: boolean) => {
+  const leave = (line: string, finished: boolean, endedOn: "win" | "enough" | "cap") => {
+    if (leaving || !child) return;
     setLeaving(true);
+    const rows = results.current;
+    house.endSession({
+      kidId: child.id,
+      kind: "place",
+      startedAt,
+      endedAt: new Date().toISOString(),
+      items: rows.length,
+      wins: rows.filter((r) => r.first === "hit").length,
+      misses: rows.filter((r) => r.first === "miss").length,
+      pending: rows.filter((r) => r.first === "pending").length,
+      endedOn: rows.length ? endedOn : "empty",
+      results: rows,
+    });
     router.push(`/kids/${kidId}/done?kind=place${finished ? "&finished=1" : ""}&line=${encodeURIComponent(line)}`);
   };
 
   const settle = (ok: boolean, isRetry: boolean, spoken?: { heard: string; pending: boolean }) => {
     if (!probe || !child) return;
-    setParty(false);
     setShaken(undefined);
     setBanner(null);
     setLocked(false);
     setRetry(false);
     sitting.current += 1;
     const firstAnswerOk = ok && !isRetry;
-    const result = house.answerDiagnostic(
-      child.id,
-      probe,
-      firstAnswerOk,
-      elapsedMs(start.current),
-      spoken ? { pending: spoken.pending, heard: spoken.heard } : undefined,
-    );
+    const result = house.answerDiagnostic(child.id, probe, firstAnswerOk, elapsedMs(start.current), spoken ? { pending: spoken.pending, heard: spoken.heard } : undefined);
     if (result.finished && result.report) {
-      leave(result.report.kidLine, true);
+      leave(result.report.kidLine, true, "win");
       return;
     }
-    if (sitting.current >= SITTING_CAP) leave(PAUSED_KID_LINE, false);
+    if (sitting.current >= SITTING_CAP) leave(PAUSED_KID_LINE, false, "cap");
   };
 
   const answer = (ok: boolean, kind: PlayKind, spoken?: { heard: string; pending: boolean }) => {
@@ -543,25 +528,27 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
       ms: elapsedMs(start.current),
       spokenText: spoken?.heard,
       spokenGrade: spoken ? (spoken.pending ? "pending" : ok ? "hit" : "miss") : undefined,
-      kidSaw: ok && !spoken?.pending ? "star" : "not that one",
+      kidSaw: spoken?.pending ? "parent will listen" : ok ? (isRetry ? "there it is" : "star") : "not that one",
       source: "placement",
     });
+    if (!isRetry) results.current.push({ itemId: probe.id, moduleId: "placement", source: "stretch", first: spoken?.pending ? "pending" : ok ? "hit" : "miss" });
     if (spoken?.pending) {
-      setBanner("Parent will listen.");
+      setBanner({ text: "Parent will listen.", tone: "note" });
       window.setTimeout(() => settle(false, isRetry, spoken), 700);
       return;
     }
-    if (ok) {
-      setParty(true);
-      setBanner(skinWin(theme.id, theme.win, seed));
+    if (ok && !isRetry) {
+      setBanner({ text: skinWin(theme.id, theme.win, seed), tone: "win" });
       house.addStars(child.id, 1);
+    } else if (ok) {
+      // A second guess on the same card is morale, not a real win: no star, no confetti.
+      setBanner({ text: "There it is!", tone: "quiet" });
     } else {
-      setBanner(skinMiss(theme.id, theme.miss, seed));
+      setBanner({ text: skinMiss(theme.id, theme.miss, seed), tone: "miss" });
     }
     window.setTimeout(() => {
-      // One honest retry for morale; only the first answer counts on the map.
+      // One honest retry; only the first answer counts on the map.
       if (!ok && !isRetry) {
-        setParty(false);
         setShaken(undefined);
         setBanner(null);
         setRetry(true);
@@ -581,16 +568,20 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   });
 
   if (!house.ready || !child || !progress) return <Loading />;
-  if (child.status === "waiting") return null;
+  if (child.status === "waiting") {
+    router.replace(`/kids/${kidId}/waiting`);
+    return null;
+  }
   if (!child.themeToday || child.themeDate !== day) {
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
   if (leaving) return null;
-  if (child.diagnosticReport || !probe) {
+  if (child.diagnosticReport && !remap) {
     router.replace(`/kids/${kidId}/play`);
     return null;
   }
+  if (!probe) return <Loading text="Finishing the map…" />;
 
   const host = sittingHost(theme.id, seed);
 
@@ -607,15 +598,13 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
   lesson.correctId = paintCorrectId(probe, theme.id);
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} data-probe={probe.id} data-probe-kind={probe.kind ?? "tap"}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
-      <Dots total={band?.probes.length ?? 0} current={progress.cursor?.probe ?? 0} />
-      <p className="mt-2 text-center text-xs font-extrabold uppercase tracking-[0.18em] text-white/60">
-        Map {summary ? summary.bandIndex + 1 : 1} of {summary?.bandCount ?? 1}
-      </p>
-      <PromptCard eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind={probe.kind ?? "tap"} widget={lesson.widget} />
-      {banner ? <HonestBanner text={banner} party={party} /> : null}
-      <div className="mx-auto mt-5 max-w-lg sm:mt-6">
+    <main className={`kid-stage play-stage theme-${theme.id}`} data-probe={probe.id} data-probe-kind={probe.kind ?? "tap"}>
+      <OfflinePill />
+      <KidChrome stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
+      <Dots total={band?.probes.length ?? 0} current={progress.cursor?.probe ?? 0} label={`Map ${summary ? summary.bandIndex + 1 : 1} of ${summary?.bandCount ?? 1}`} />
+      <Prompt eyebrow={band?.kidEyebrow ?? "Warm-up"} prompt={lesson.prompt} kind={probe.kind ?? "tap"} widget={lesson.widget} />
+      {banner ? <HonestBanner banner={banner} /> : null}
+      <div className="play-stage__answers">
         {isSpeak ? (
           <>
             {probe.print ? <PrintCard text={probe.print} /> : null}
@@ -633,20 +622,16 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
           />
         )}
       </div>
-      <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => leave(PAUSED_KID_LINE, false)} />
+      <PlayDock prompt={lesson.prompt} hint={lesson.parentHint} onEnough={() => leave(PAUSED_KID_LINE, false, "enough")} />
     </main>
   );
 }
 
-function PlayDock({
-  prompt,
-  hint,
-  onEnough,
-}: {
-  prompt: string;
-  hint?: string;
-  onEnough?: () => void;
-}) {
+// ---------------------------------------------------------------------------
+// Dock and HUD
+// ---------------------------------------------------------------------------
+
+function PlayDock({ prompt, hint, onEnough }: { prompt: string; hint?: string; onEnough?: () => void }) {
   const hold = useRef<number | null>(null);
   const [holding, setHolding] = useState(false);
 
@@ -664,32 +649,29 @@ function PlayDock({
   return (
     <nav className="play-dock" aria-label="Play tools">
       <div className="play-dock__bar">
-        <button type="button" className="play-dock__again" onClick={() => speak(prompt)}>
-          <SpeakerIcon size={26} />
+        <button type="button" className="play-dock__again" onClick={() => speak(prompt)} aria-label={`Hear it again: ${prompt}`}>
+          <SpeakerIcon size={24} />
           Again
         </button>
         {onEnough ? (
           <button
             type="button"
             className="play-dock__enough"
-            aria-label="Hold for that's enough."
+            aria-label="That's enough. Press and hold to finish."
             onPointerDown={startHold}
             onPointerUp={endHold}
             onPointerLeave={endHold}
             onPointerCancel={endHold}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <span className={`hold-ring relative grid h-12 w-12 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}>
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-[#1b1440] text-white">
-                <HomeIcon size={22} />
+            <span className={`hold-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}>
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#1b1440] text-white">
+                <HomeIcon size={20} />
               </span>
             </span>
             <span className="min-w-0 flex-1 text-left">
-              <span className="block text-lg font-black leading-none">{holding ? "Keep holding…" : "That's enough"}</span>
-              <span className="mt-1 block text-xs font-extrabold uppercase tracking-wide text-white/70">
-                {holding ? "Almost…" : "Hold to finish"}
-              </span>
-              <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+              <span className="block leading-none">{holding ? "Keep holding…" : "That's enough"}</span>
+              <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-white/15">
                 <span className={`block h-full rounded-full bg-gradient-to-r from-amber-300 to-fuchsia-400 ${holding ? "hold-fill" : "w-0"}`} />
               </span>
             </span>
@@ -701,194 +683,186 @@ function PlayDock({
   );
 }
 
-function KidChrome({
-  kidName,
-  stars,
-  themeId,
-  sitting,
-  hostEmoji,
-}: {
-  kidName: string;
-  stars: number;
-  themeId: ThemeId;
-  sitting?: string;
-  hostEmoji?: string;
-}) {
+/** 48px HUD: host orb · host label · stars. The kid's own name is not repeated on every card. */
+function KidChrome({ stars, themeId, sitting, hostEmoji }: { stars: number; themeId: ThemeId; sitting?: string; hostEmoji?: string }) {
   const t = themeOf(themeId);
   return (
-    <div className="hud glass mx-auto max-w-lg">
-      <span className="orb host-float h-14 w-14 shrink-0 text-3xl" aria-label={sitting ?? t.host}>
+    <div className="hud glass mx-auto w-full max-w-lg">
+      <span className="orb host-float h-11 w-11 shrink-0 text-2xl" aria-label={sitting ?? t.host}>
         <span className="emoji-3d">{hostEmoji ?? t.hostEmoji}</span>
       </span>
-      <p className="display min-w-0 flex-1 text-center text-2xl leading-none">
-        {kidName}
-        <span className="mt-1 block truncate text-[11px] font-extrabold uppercase tracking-[0.14em] opacity-70">{sitting ?? t.host}</span>
-      </p>
-      <span className="star-pill text-xl">
-        <StarIcon size={20} className="text-amber-700 drop-shadow" />
+      <p className="display min-w-0 flex-1 truncate text-center text-body leading-none text-white/90">{sitting ?? t.host}</p>
+      <span className="star-pill text-body" aria-live="polite" aria-label={`${stars} stars`}>
+        <StarIcon size={18} className="text-amber-700 drop-shadow" />
         {stars}
       </span>
     </div>
   );
 }
 
-type Deck = { key: string; items: LessonItem[]; used: string[] };
+// ---------------------------------------------------------------------------
+// Daily / review / scout / try sitting
+// ---------------------------------------------------------------------------
 
-/** Deal a session: one tap, one drag, one speak, one trace up front, then the rest, cut to the session length. */
-function dealDeck(key: string, mod: { items: LessonItem[] } | undefined, mode: "daily" | "scout" | "try", sessionLength: Child["sessionLength"], track?: Track): Deck {
-  if (!mod) return { key, items: [], used: [] };
+type Mode = "daily" | "scout" | "try";
+type Outcome = SessionResult["first"];
+
+const SCOUT_MODULE = { letters: "scout:MY-1", words: "scout:RH-1" } as const;
+
+/** What to play. Daily: the plan's session. Try: one module top to bottom. Scout: the whole pack, always. */
+function dealFor(child: Child, state: HouseState, mode: Mode, picked: ModuleDef | undefined, day: string, width: number): Session {
   if (mode === "scout") {
-    const scout = track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
-    return { key, items: scout, used: scout.map((it) => it.id) };
+    const scout = child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1;
+    const moduleId = SCOUT_MODULE[child.track];
+    return { kind: "daily", moduleId, entries: scout.map((item) => ({ item, moduleId, source: "stretch" as const })), closers: [], reviewed: [] };
   }
-  const base = mod.items;
-  const taps = base.filter((it) => it.kind === "tap");
-  const drags = base.filter((it) => it.kind === "drag");
-  const speaks = base.filter((it) => it.kind === "speak");
-  const traces = base.filter((it) => it.widget === "trace");
-  const usedLead = new Set([taps[0]?.id, drags[0]?.id, speaks[0]?.id, traces[0]?.id].filter(Boolean));
-  const rest = base.filter((it) => !usedLead.has(it.id));
-  const lead = [taps[0], drags[0], speaks[0], traces[0], ...rest].filter(Boolean) as LessonItem[];
-  const width = typeof window !== "undefined" ? window.innerWidth : 1024;
-  const session = tripSessionLength(sessionLength, width);
-  const n = mode === "try" ? lead.length : session === "shorter" ? 5 : session === "longer" ? 9 : 7;
-  const items = lead.slice(0, n);
-  return { key, items, used: items.map((it) => it.id) };
+  if (mode === "try") {
+    const mod = picked ?? activeModule(child, state);
+    if (!mod) return { kind: "daily", entries: [], closers: [], reviewed: [] };
+    return { kind: "daily", moduleId: mod.id, entries: leadOrder(mod.items).map((item) => ({ item, moduleId: mod.id, source: "stretch" as const })), closers: [], reviewed: [] };
+  }
+  return buildSession(child, state, day, width);
 }
 
-export function DailySession({
-  kidId,
-  mode,
-  moduleId,
-}: {
-  kidId: string;
-  mode: "daily" | "scout" | "try";
-  moduleId?: string;
-}) {
+export function DailySession({ kidId, mode, moduleId }: { kidId: string; mode: Mode; moduleId?: string }) {
   const house = useHouse();
   const router = useRouter();
   const child = house.kid(kidId);
   const theme = themeOf(child?.themeToday);
-  const picked = moduleId ? house.module(moduleId) : undefined;
-  const safePicked =
-    picked && child && (child.track === "letters" && picked.track === "words" && !wordsUnlocked(child) ? undefined : picked);
-  const mod = safePicked ?? (child ? kidNextModule(child, house.state) : undefined);
   const day = useToday();
+  const picked = moduleId ? house.module(moduleId) : undefined;
+  const safePicked = picked && child && usableFor(child, picked) ? picked : undefined;
+
+  // Dealt once when the sitting opens; attempts landing in the store never re-deal it.
+  const [session, setSession] = useState<Session | null>(() =>
+    child ? dealFor(child, house.state, mode, safePicked, day, typeof window !== "undefined" ? window.innerWidth : 1024) : null,
+  );
+  const [startedAt] = useState(() => new Date().toISOString());
   const [i, setI] = useState(0);
   const [version, setVersion] = useState(0);
-  const [banner, setBanner] = useState<string | null>(null);
-  const [party, setParty] = useState(false);
+  const [slotMisses, setSlotMisses] = useState(0);
+  const [banner, setBanner] = useState<Banner | null>(null);
   const [shaken, setShaken] = useState<string>();
-  const [wins, setWins] = useState(0);
   const [lastSlot, setLastSlot] = useState<number>();
+  const [locked, setLocked] = useState(false);
   const start = useRef(0);
+  const results = useRef(new Map<number, SessionResult>());
   const scoutRows = useRef<ScoutRow[]>([]);
-  const scoutSaved = useRef(false);
+  const ended = useRef(false);
+  const closerUsed = useRef(false);
 
-  // The deck is derived from the module and mode; skip-stuck swaps one card at
-  // a time through `swap`, keyed so a new module deals a fresh deck.
-  const sessionLength = child?.sessionLength ?? "standard";
-  const track = child?.track;
-  const deckKey = `${mod?.id ?? "none"}|${mode}|${sessionLength}|${track}`;
-  const baseDeck = dealDeck(deckKey, mod, mode, sessionLength, track);
-  const [swap, setSwap] = useState<Deck | null>(null);
-  const deck = swap && swap.key === deckKey ? swap : baseDeck;
-  const queue = deck.items;
-  const item = queue[i];
-
-  // A word item dealt before words are unlocked is swapped for a safe tap
-  // step below, so it must not arm the ear either.
-  const blockedWord = Boolean(
-    item &&
-      child &&
-      !wordsUnlocked(child) &&
-      (item.dimension === "words" || item.dimension === "sentences" || (item.word && item.slots && item.slots.length > 1)),
-  );
-  const speakTarget = item?.kind === "speak" && !blockedWord ? item.speakTarget ?? item.word ?? item.letter : undefined;
+  const entry: SessionEntry | undefined = session?.entries[i];
+  const item = entry?.item;
+  const speakTarget = item?.kind === "speak" ? item.speakTarget ?? item.word ?? item.letter : undefined;
   const seed = `${kidId}-${day}`;
 
+  // Every card (and every retry) starts with the teacher and a fresh clock. On a
+  // speak retry this is also what re-opens the ear: once, after the replay.
   useEffect(() => {
     if (item) speak(item.prompt);
     start.current = nowMs();
     return () => stopSpeech();
-  }, [item]);
+  }, [item, version]);
 
-  // Every scout answer feeds one real report at the end of the tunnel; the
-  // daily path never changes from it.
-  const finishScout = () => {
-    if (mode !== "scout" || !child || scoutSaved.current || scoutRows.current.length === 0) return;
-    scoutSaved.current = true;
-    house.saveScout(scoutReportFrom(child.id, child.track, scoutRows.current));
+  const finish = (endedOn: "win" | "miss" | "enough") => {
+    if (ended.current || !child || !session) return;
+    ended.current = true;
+    if (mode === "scout" && scoutRows.current.length) house.saveScout(scoutReportFrom(child.id, child.track, scoutRows.current));
+    const rows = [...results.current.values()];
+    house.endSession({
+      kidId: child.id,
+      kind: mode === "scout" ? "scout" : mode === "try" ? "try" : session.kind === "review" ? "review" : "daily",
+      moduleId: mode === "scout" ? undefined : session.moduleId,
+      startedAt,
+      endedAt: new Date().toISOString(),
+      items: rows.length,
+      wins: rows.filter((r) => r.first === "hit").length,
+      misses: rows.filter((r) => r.first === "miss").length,
+      pending: rows.filter((r) => r.first === "pending").length,
+      endedOn: rows.length ? endedOn : "empty",
+      results: rows,
+    });
+    router.push(`/kids/${kidId}/done?kind=${mode}`);
+  };
+
+  const advance = (last: Outcome) => {
+    if (!session) return;
+    setBanner(null);
+    setShaken(undefined);
+    setVersion(0);
+    setSlotMisses(0);
+    setLocked(false);
+    if (i + 1 < session.entries.length) {
+      setI(i + 1);
+      return;
+    }
+    // End on a real win: when the last card missed, one known card closes the sitting.
+    if (last === "miss" && session.closers.length && !closerUsed.current) {
+      closerUsed.current = true;
+      setSession((s) => (s ? { ...s, entries: [...s.entries, s.closers[0]] } : s));
+      setI(i + 1);
+      return;
+    }
+    finish(last === "miss" ? "miss" : "win");
   };
 
   const after = (ok: boolean, kind: PlayKind, spoken?: { text: string; pending: boolean }) => {
-    if (!child || !mod || !item) return;
-    const playedId = blockedWord ? "safe-letter-s" : item.id;
-    const dimension = blockedWord ? "letterRecognition" : item.dimension;
+    if (!child || !session || !entry || locked || ended.current) return;
+    setLocked(true);
+    const first = version === 0;
+    const outcome: Outcome = spoken?.pending ? "pending" : ok ? "hit" : "miss";
     const ms = elapsedMs(start.current);
+    const source: AttemptSource = mode === "scout" ? "scout" : mode === "try" ? "try" : entry.source === "stretch" ? "daily" : "review";
     house.recordAttempt({
       kidId: child.id,
-      moduleId: mod.id,
-      itemId: playedId,
+      moduleId: entry.moduleId,
+      itemId: entry.item.id,
       version,
       kind,
-      dimension,
-      correct: ok,
+      dimension: entry.item.dimension,
+      correct: ok && !spoken?.pending,
       ms,
       spokenText: spoken?.text,
       spokenGrade: spoken ? (spoken.pending ? "pending" : ok ? "hit" : "miss") : undefined,
-      kidSaw: ok && !spoken?.pending ? "star" : "not that one",
-      source: mode === "scout" ? "scout" : mode === "try" ? "try" : "daily",
+      kidSaw: spoken?.pending ? "parent will listen" : ok ? (first ? "star" : "there it is") : "not that one",
+      source,
     });
+    if (first && !results.current.has(i)) results.current.set(i, { itemId: entry.item.id, moduleId: entry.moduleId, source: entry.source, first: outcome });
     // Only the first answer on a card counts for the scout, like the map.
-    if (mode === "scout" && version === 0 && !blockedWord && !scoutRows.current.some((r) => r.item.id === item.id)) {
-      scoutRows.current.push({ item, ok, ms, pending: spoken?.pending, heard: spoken?.text });
+    if (mode === "scout" && first && !scoutRows.current.some((r) => r.item.id === entry.item.id)) {
+      scoutRows.current.push({ item: entry.item, ok, ms, pending: spoken?.pending, heard: spoken?.text });
     }
-    const finish = () => {
-      finishScout();
-      router.push(`/kids/${kidId}/done?kind=${mode}&module=${mod.id}`);
-    };
     if (spoken?.pending) {
-      setBanner("Parent will listen.");
-      window.setTimeout(() => {
-        setBanner(null);
-        setVersion(0);
-        if (i + 1 >= queue.length) finish();
-        else setI((n) => n + 1);
-      }, 700);
+      setBanner({ text: "Parent will listen.", tone: "note" });
+      window.setTimeout(() => advance("pending"), 700);
       return;
     }
-    if (ok) {
-      setParty(true);
-      setBanner(skinWin(theme.id, theme.win, seed));
+    if (ok && first) {
       house.addStars(child.id, 1);
-      setWins((w) => w + 1);
+      setBanner({ text: skinWin(theme.id, theme.win, seed), tone: "win" });
+    } else if (ok) {
+      setBanner({ text: "There it is!", tone: "quiet" });
     } else {
-      setBanner(skinMiss(theme.id, theme.miss, seed));
+      setBanner({ text: skinMiss(theme.id, theme.miss, seed), tone: "miss" });
     }
     window.setTimeout(() => {
-      setParty(false);
-      setShaken(undefined);
-      // Clear the banner on every outcome; a miss retries the same card and
-      // the ear only re-arms once the banner is gone.
-      setBanner(null);
       if (ok) {
-        // A strong kid ends a daily one card early. The scout plays every
-        // item: its last card is the hardest one and the report needs it.
-        if (mode !== "scout" && wins + 1 >= 5 && i + 1 >= queue.length - 1) {
-          finish();
-          return;
-        }
-        setVersion(0);
-        setI((n) => Math.min(n + 1, queue.length - 1));
-        if (i + 1 >= queue.length) finish();
-      } else if (version + 1 >= 2) {
-        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : mod.items;
-        const alt = nextSameSkill(bank, item, new Set(deck.used));
+        advance("hit");
+        return;
+      }
+      // Honest miss. Same card once more, then another version of the same
+      // skill, then move on: three misses on one slot never strand the kid.
+      const missesHere = slotMisses + 1;
+      if (missesHere >= 3) {
+        advance("miss");
+        return;
+      }
+      setSlotMisses(missesHere);
+      if (missesHere >= 2) {
+        const bank = mode === "scout" ? (child.track === "letters" ? SCOUT_MY1 : SCOUT_RH1) : house.module(entry.moduleId)?.items ?? [];
+        const alt = nextSameSkill(bank, entry.item, new Set(session.entries.map((e) => e.item.id)));
         if (alt) {
-          const items = [...queue];
-          items[i] = alt;
-          setSwap({ key: deckKey, items, used: [...deck.used, alt.id] });
+          setSession((s) => (s ? { ...s, entries: s.entries.map((e, k) => (k === i ? { ...e, item: alt } : e)) } : s));
           setVersion(0);
         } else {
           setVersion((v) => v + 1);
@@ -896,6 +870,9 @@ export function DailySession({
       } else {
         setVersion((v) => v + 1);
       }
+      setShaken(undefined);
+      setBanner(null);
+      setLocked(false);
     }, ok ? 1100 : 1600);
   };
 
@@ -904,7 +881,7 @@ export function DailySession({
     prompt: item?.prompt,
     target: speakTarget,
     onAnswer: (heard, hit) => after(hit, "speak", { text: heard, pending: false }),
-    enabled: Boolean(item) && !banner,
+    enabled: Boolean(item) && !banner && !locked,
   });
 
   if (!house.ready || !child) return <Loading />;
@@ -920,55 +897,44 @@ export function DailySession({
     router.replace(`/kids/${kidId}/place`);
     return null;
   }
-  if (!mod || !item) {
+  if (!session || !entry || !item) {
     return (
       <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center p-6 text-center`}>
         <span className="orb h-24 w-24 text-white">
           <TelescopeIcon size={44} />
         </span>
-        <p className="display title-pop mt-6 text-4xl">No module on the path yet.</p>
-        <Link href="/parent" className="btn-solid mt-6 inline-flex items-center gap-2 px-6 py-3 text-lg font-black">
-          Parent path
-          <ArrowRightIcon size={20} />
+        <p className="display title-pop mt-6 text-hero">Nothing to play yet.</p>
+        <p className="mt-3 max-w-xs text-body font-bold text-white/82">A grown-up picks the next adventure.</p>
+        <Link href="/kids" className="btn-solid mt-6 inline-flex min-h-14 items-center gap-2 px-6 py-3 text-title font-black">
+          <HomeIcon size={22} />
+          Home
         </Link>
       </main>
     );
   }
 
   const host = sittingHost(theme.id, seed);
-  const rawPlay: LessonItem = blockedWord
-    ? {
-        id: "safe-letter-s",
-        kind: "tap",
-        widget: "stamp",
-        prompt: "Stamp s.",
-        dimension: "letterRecognition",
-        choices: ["s", "t", "m"].map((l) => ({ id: l, label: l })),
-        correctId: "s",
-        letter: "s",
-      }
-    : item;
   const playItem: LessonItem = {
-    ...rawPlay,
-    choices: paintChoices(rawPlay, theme.id),
-    correctId: paintCorrectId(rawPlay, theme.id),
+    ...item,
+    choices: paintChoices(item, theme.id),
+    correctId: paintCorrectId(item, theme.id),
   };
-
-  const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : "Today's adventure";
+  const eyebrow = mode === "scout" ? "Secret tunnel" : mode === "try" ? "Try run" : session.kind === "review" ? "Victory lap" : entry.source === "review" ? "Warm-up" : entry.source === "close" ? "One more" : "Today's adventure";
 
   return (
-    <main className={`kid-stage theme-${theme.id} px-4 py-4 pb-36`} data-item={playItem.id} data-item-kind={playItem.kind}>
-      <KidChrome kidName={child.name} stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
-      <Dots total={queue.length} current={i} />
-      <PromptCard eyebrow={eyebrow} prompt={playItem.prompt} kind={playItem.kind} widget={playItem.widget} />
-      {banner ? <HonestBanner text={banner} party={party} /> : null}
-      <div className="mx-auto mt-6 max-w-lg">
+    <main className={`kid-stage play-stage theme-${theme.id}`} data-item={playItem.id} data-item-kind={playItem.kind} data-item-source={entry.source}>
+      <OfflinePill />
+      <KidChrome stars={child.stars} themeId={theme.id} sitting={host?.label} hostEmoji={host?.emoji} />
+      <Dots total={session.entries.length} current={i} />
+      <Prompt eyebrow={eyebrow} prompt={playItem.prompt} kind={playItem.kind} widget={playItem.widget} />
+      {banner ? <HonestBanner banner={banner} /> : null}
+      <div className="play-stage__answers">
         {playItem.kind === "tap" && playItem.widget !== "trace" ? (
           <ChoiceGrid
             key={`${playItem.id}-${version}`}
             choices={playItem.choices ?? []}
             correctId={playItem.correctId}
-            seed={`${seed}-${mod.id}-${playItem.id}-${version}`}
+            seed={`${seed}-${entry.moduleId}-${playItem.id}-${version}`}
             avoidSlot={lastSlot}
             shaken={shaken}
             onPick={(id, correctSlot) => {
@@ -979,23 +945,18 @@ export function DailySession({
             }}
           />
         ) : null}
-        {playItem.kind === "drag" ? <DragBoard item={playItem} themeId={theme.id} onDone={(ok) => after(ok, "drag")} /> : null}
-        {playItem.widget === "trace" ? <TracePad letter={playItem.letter ?? playItem.correctId ?? "s"} onDone={(ok) => after(ok, "tap")} /> : null}
-        {playItem.kind === "speak" ? (
-          <SpeakPanel onParent={() => after(false, "speak", { text: "parent-listen", pending: true })} />
-        ) : null}
+        {playItem.kind === "drag" ? <DragBoard key={`${playItem.id}-${version}`} item={playItem} themeId={theme.id} onDone={(ok) => after(ok, "drag")} /> : null}
+        {playItem.widget === "trace" ? <TracePad key={`${playItem.id}-${version}`} letter={playItem.letter ?? playItem.correctId ?? "s"} onDone={() => after(true, "tap")} /> : null}
+        {playItem.kind === "speak" ? <SpeakPanel onParent={() => after(false, "speak", { text: "parent-listen", pending: true })} /> : null}
       </div>
-      <PlayDock
-        prompt={playItem.prompt}
-        hint={playItem.parentHint}
-        onEnough={() => {
-          finishScout();
-          router.push(`/kids/${kidId}/done?kind=${mode}`);
-        }}
-      />
+      <PlayDock prompt={playItem.prompt} hint={playItem.parentHint} onEnough={() => finish("enough")} />
     </main>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Picker
+// ---------------------------------------------------------------------------
 
 const KID_GRADIENTS: [string, string][] = [
   ["#f59e0b", "#ec4899"],
@@ -1008,27 +969,14 @@ const KID_GRADIENTS: [string, string][] = [
 export function KidPicker() {
   const { state, ready } = useHouse();
   const router = useRouter();
-  const [holding, setHolding] = useState(false);
-  const timer = useRef<number | null>(null);
-
-  const startHold = () => {
-    setHolding(true);
-    timer.current = window.setTimeout(() => {
-      router.push("/parent");
-    }, 1600);
-  };
-  const endHold = () => {
-    setHolding(false);
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = null;
-  };
 
   if (!ready) return <Loading />;
   return (
-    <main className="kid-stage theme-planets-space px-4 py-8 pb-40">
-      <StageHeading eyebrow="Player select" title="Who's reading?" sub="Tap a face. Stars, not grades." />
+    <main className="kid-stage theme-planets-space px-4 pb-[calc(var(--dock-h)+env(safe-area-inset-bottom,0px)+1rem)] pt-6">
+      <OfflinePill />
+      <StageHeading eyebrow="Player select" title="Who's reading?" sub="Tap your face." />
       <InstallHint />
-      <div className="mx-auto mt-8 grid max-w-lg grid-cols-1 gap-4">
+      <div className="mx-auto mt-5 grid max-w-lg grid-cols-1 gap-3">
         {state.kids.map((k, idx) => {
           const waiting = k.status === "waiting";
           const [a, b] = KID_GRADIENTS[idx % KID_GRADIENTS.length];
@@ -1036,29 +984,24 @@ export function KidPicker() {
             <Link
               key={k.id}
               href={waiting ? `/kids/${k.id}/waiting` : `/kids/${k.id}/theme`}
-              className={`fat-card rise-in stagger-${Math.min(idx + 1, 7)} group flex items-center gap-4 p-5 ${waiting ? "saturate-50" : ""}`}
+              className={`fat-card rise-in stagger-${Math.min(idx + 1, 4)} flex min-h-[6rem] items-center gap-4 p-4 ${waiting ? "opacity-70 saturate-50" : ""}`}
               style={waiting ? ({ "--card": "#ece9f4" } as CSSProperties) : undefined}
+              data-kid={k.id}
             >
-              <span
-                className="orb orb-ring display h-20 w-20 shrink-0 text-5xl text-white"
-                style={{ ["--orb-a" as string]: waiting ? "#94a3b8" : a, ["--orb-b" as string]: waiting ? "#475569" : b }}
-              >
-                {waiting ? <LockIcon size={36} /> : k.name.slice(0, 1)}
+              <span className="orb display h-14 w-14 shrink-0 text-3xl text-white" style={{ ["--orb-a" as string]: waiting ? "#94a3b8" : a, ["--orb-b" as string]: waiting ? "#475569" : b }}>
+                {waiting ? <LockIcon size={28} /> : k.name.slice(0, 1)}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="display block text-4xl leading-none">{k.name}</span>
-                <span className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-extrabold uppercase tracking-wide opacity-60">
-                  {waiting ? null : <BoltIcon size={14} />}
-                  {waiting ? "Coming later" : k.track === "letters" ? "Letters and sounds" : "Word adventure"}
-                </span>
+                <span className="display block text-title leading-none">{k.name}</span>
+                <span className="mt-1 block text-body font-bold text-ink/70">{waiting ? "Coming later" : k.track === "letters" ? "Letters and sounds" : "Word adventure"}</span>
               </span>
               {waiting ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-900/80 px-3 py-1.5 text-sm font-extrabold text-white">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-900/80 px-3 py-1.5 text-label font-extrabold text-white">
                   <LockIcon size={14} />
                   Soon
                 </span>
               ) : (
-                <span className="star-pill text-lg">
+                <span className="star-pill text-body">
                   <StarIcon size={18} className="text-amber-700" />
                   {k.stars}
                 </span>
@@ -1067,32 +1010,8 @@ export function KidPicker() {
           );
         })}
       </div>
-      <nav className="grades-dock" aria-label="Parent grades">
-        <button
-          type="button"
-          className="grades-dock__hold"
-          aria-label="Hold to open the grades page."
-          onPointerDown={startHold}
-          onPointerUp={endHold}
-          onPointerLeave={endHold}
-          onPointerCancel={endHold}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <span className={`hold-ring relative grid h-12 w-12 shrink-0 place-items-center rounded-full ${holding ? "hold-ring--go" : ""}`}>
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#1b1440] text-white">
-              <ShieldIcon size={22} />
-            </span>
-          </span>
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block text-lg font-black leading-none">{holding ? "Keep holding…" : "Grades"}</span>
-            <span className="mt-1 block text-xs font-extrabold uppercase tracking-wide text-white/70">
-              {holding ? "Almost…" : "Hold to open the desk"}
-            </span>
-            <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-white/15">
-              <span className={`block h-full rounded-full bg-gradient-to-r from-amber-300 to-fuchsia-400 ${holding ? "hold-fill" : "w-0"}`} />
-            </span>
-          </span>
-        </button>
+      <nav className="grades-dock" aria-label="Parents">
+        <HoldToOpen onOpen={() => router.push("/parent")} />
       </nav>
     </main>
   );
@@ -1101,10 +1020,11 @@ export function KidPicker() {
 export function Loading({ text = "Loading…" }: { text?: string }) {
   return (
     <main className="kid-stage theme-planets-space flex min-h-dvh items-center justify-center p-8">
-      <p className="glass inline-flex items-center gap-3 rounded-full px-5 py-3 text-lg font-black text-white">
+      <p className="glass inline-flex items-center gap-3 rounded-full px-5 py-3 text-body font-black text-white">
         <span className="h-3 w-3 animate-pulse rounded-full bg-amber-300" />
         {text}
       </p>
     </main>
   );
 }
+

@@ -190,9 +190,6 @@ function letterTile(letter: string): Tile {
   return { id: `l-${letter}`, kind: "letter", label: letter, phoneme: `/${letter}/` };
 }
 
-function soundTile(letter: string, phoneme: string): Tile {
-  return { id: `s-${letter}`, kind: "sound", label: phoneme, phoneme };
-}
 
 function cvcDrag(word: string): LessonItem {
   const letters = word.split("");
