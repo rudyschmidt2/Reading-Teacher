@@ -11,16 +11,16 @@ export function PwaRegister() {
   return null;
 }
 
-export function InstallHint() {
-  const [show, setShow] = useState(false);
-  const [ios, setIos] = useState(false);
+/** Only rendered after the house has loaded on the client, so window is safe to read once. */
+function installHint(): { show: boolean; ios: boolean } {
+  if (typeof window === "undefined") return { show: false, ios: false };
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone;
+  if (standalone) return { show: false, ios: false };
+  return { show: true, ios: /iPad|iPhone|iPod/.test(navigator.userAgent) };
+}
 
-  useEffect(() => {
-    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone;
-    if (standalone) return;
-    setIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
-    setShow(true);
-  }, []);
+export function InstallHint() {
+  const [{ show, ios }] = useState(installHint);
 
   if (!show) return null;
   return (

@@ -257,7 +257,9 @@ export function useLessonListen(opts: {
 }) {
   const { prompt, target, onAnswer, enabled = true } = opts;
   const answer = useRef(onAnswer);
-  answer.current = onAnswer;
+  useEffect(() => {
+    answer.current = onAnswer;
+  });
 
   useEffect(() => {
     if (!enabled || !prompt || !target) {
