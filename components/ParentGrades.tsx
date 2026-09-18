@@ -10,12 +10,14 @@ import {
   MODULE_STATUS_LABEL,
   moduleFunctionGrades,
   moduleProgress,
-  verdictKey,
   verdictOf,
+  verdictProvenance,
+  verdictRecord,
   type FunctionGrade,
   type ModuleKidStatus,
   type ModuleProgress,
 } from "@/lib/grades";
+import { activeModule } from "@/lib/plan";
 import { useHouse } from "@/lib/store";
 import type { BandReport, Child, ModuleDef, ModuleVerdict } from "@/lib/types";
 import {
@@ -55,6 +57,7 @@ function avatarFor(idx: number) {
 
 function statusBadge(status: ModuleKidStatus) {
   if (status === "passed") return "badge badge--good";
+  if (status === "review") return "badge badge--info";
   if (status === "failed") return "badge badge--bad";
   if (status === "struggle-stop") return "badge badge--warn";
   if (status === "in-progress") return "badge badge--info";
@@ -63,6 +66,7 @@ function statusBadge(status: ModuleKidStatus) {
 
 function sheetBadge(status: ModuleKidStatus) {
   if (status === "passed") return "grade-pill grade-pill--pass";
+  if (status === "review") return "grade-pill grade-pill--review";
   if (status === "failed") return "grade-pill grade-pill--fail";
   if (status === "struggle-stop") return "grade-pill grade-pill--stop";
   if (status === "in-progress") return "grade-pill grade-pill--live";
@@ -171,7 +175,7 @@ function GradesInner() {
               <CompassIcon size={24} />
             </span>
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-300">Parent door</p>
+              <p className="text-label font-extrabold uppercase tracking-[0.08em] text-emerald-300">Parent door</p>
               <h1 className="text-2xl font-black text-white sm:text-3xl">Grading</h1>
             </div>
           </div>
@@ -180,7 +184,7 @@ function GradesInner() {
             Desk
           </Link>
         </header>
-        <p className="mt-2 text-sm text-slate-400">Every module, every function, every kid. Real numbers only. Tap a module for the full sheet.</p>
+        <p className="muted mt-2 text-label">Lessons only — real numbers or nothing. Tap a module for the green sheet.</p>
 
         <KidStrip kids={kids} filter={filter} onPick={setFilter} />
         <MapStrip kids={shown} />
@@ -228,10 +232,15 @@ function KidStrip({ kids, filter, onPick }: { kids: Child[]; filter: string | nu
         let sub: string;
         if (k.status === "waiting") sub = "waiting";
         else {
-          const passed = k.path.filter((id) => verdictOf(state, k.id, id) === "pass").length;
-          sub = k.path.length ? `${passed}/${k.path.length} passed` : "no path yet";
+          const passed = state.modules.filter((m) => verdictOf(state, k.id, m.id) === "pass").length;
+          const reviewing = (k.plan?.review ?? []).length;
+          const active = activeModule(k, state);
+          const parts = [`${passed} passed`];
+          if (reviewing) parts.push(`${reviewing} reviewing`);
+          parts.push(active ? `${active.title} active` : k.diagnosticReport ? "path finished" : "not mapped");
+          sub = parts.join(" · ");
           const map = mapLine(k);
-          if (map.state === "done") sub += ` · ${map.shelf}${map.frontier ? ` · ${map.frontier}` : ""}`;
+          if (map.state === "done") sub += ` · ${map.shelf}`;
         }
         return (
           <button
@@ -268,7 +277,7 @@ function MapStrip({ kids }: { kids: Child[] }) {
       <h2 id="map-strip" className="text-lg font-black text-white">
         Kids on the map
       </h2>
-      <p className="text-xs text-slate-500">Shelf and frontier come from the skills map. Start here and Practice these live on the desk.</p>
+      <p className="muted text-label">Shelf and frontier come from the skills map. Start here and Practice these live on the desk.</p>
       <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
         {kids.map((k) => {
           const idx = Math.max(0, state.kids.findIndex((x) => x.id === k.id));
@@ -337,6 +346,9 @@ function MapStrip({ kids }: { kids: Child[] }) {
 
 function ModuleCard({ module, kids, onOpen }: { module: ModuleDef; kids: Child[]; onOpen: (id: string) => void }) {
   const { state } = useHouse();
+  const rows = kids
+    .map((k) => ({ k, p: moduleProgress(k, module, state.attempts, verdictRecord(state, k.id, module.id)) }))
+    .filter(({ p }) => kids.length === 1 || (p.status !== "off-path" && p.status !== "waiting"));
   return (
     <button
       type="button"
@@ -354,22 +366,22 @@ function ModuleCard({ module, kids, onOpen }: { module: ModuleDef; kids: Child[]
         </span>
         <span className="mt-0.5 block text-sm text-slate-400">{module.skill}</span>
         <span className="mt-3 grid gap-1.5">
-          {kids.map((k) => {
+          {rows.length === 0 ? <span className="muted text-label">Not on anyone&apos;s path.</span> : null}
+          {rows.map(({ k, p }) => {
             const idx = Math.max(0, state.kids.findIndex((x) => x.id === k.id));
-            const p = moduleProgress(k, module, state.attempts, state.verdicts[verdictKey(k.id, module.id)]);
             return (
               <span key={k.id} className="flex items-center gap-2">
                 <Avatar child={k} idx={idx} size="h-6 w-6 text-[10px]" />
                 <span className="w-16 shrink-0 truncate text-sm font-bold text-slate-200">{k.name}</span>
                 <span className={`${statusBadge(p.status)} shrink-0`}>{MODULE_STATUS_LABEL[p.status]}</span>
-                {p.status === "waiting" ? (
+                {p.pct === undefined ? (
                   <span className="stat-bar flex-1 opacity-40" aria-hidden />
                 ) : (
                   <span className="stat-bar flex-1" role="img" aria-label={`${p.itemsHit} of ${p.items} items hit`}>
-                    <span style={{ width: `${p.pct ?? 0}%` }} />
+                    <span style={{ width: `${p.pct}%` }} />
                   </span>
                 )}
-                <span className="w-9 shrink-0 text-right text-[11px] font-bold tabular-nums text-slate-400">
+                <span className="muted w-9 shrink-0 text-right text-micro font-bold tabular-nums">
                   {p.pct === undefined ? "—" : `${p.pct}%`}
                 </span>
               </span>
@@ -483,7 +495,7 @@ function GradeSheet({ module, kids, onClose }: { module: ModuleDef; kids: Child[
 
 function KidSheet({ child, module, idx }: { child: Child; module: ModuleDef; idx: number }) {
   const house = useHouse();
-  const verdict = house.state.verdicts[verdictKey(child.id, module.id)];
+  const verdict = verdictRecord(house.state, child.id, module.id);
   const progress = moduleProgress(child, module, house.state.attempts, verdict);
   const grades = child.status === "waiting" ? [] : moduleFunctionGrades(child, module, house.state.attempts);
 
@@ -513,15 +525,20 @@ function KidSheet({ child, module, idx }: { child: Child; module: ModuleDef; idx
           <OverallRow progress={progress} />
           <MapResult child={child} module={module} />
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {grades.map((g) => (
-              <li key={g.key}>
-                <FunctionTile grade={g} />
-              </li>
-            ))}
+            {grades
+              .filter((g) => g.attempts > 0)
+              .map((g) => (
+                <li key={g.key}>
+                  <FunctionTile grade={g} />
+                </li>
+              ))}
             <li>
               <VerdictTile progress={progress} />
             </li>
           </ul>
+          {grades.some((g) => g.attempts === 0) ? (
+            <p className="mt-2 text-xs font-bold text-emerald-50/85">No attempts yet: {grades.filter((g) => g.attempts === 0).map((g) => g.label.toLowerCase()).join(", ")}.</p>
+          ) : null}
           <QuickActions child={child} module={module} progress={progress} />
         </>
       )}
@@ -574,7 +591,9 @@ function OverallRow({ progress }: { progress: ModuleProgress }) {
       </span>
       <p className="mt-1.5 text-xs font-bold text-emerald-50/85">
         {total === 0
-          ? "No attempts yet."
+          ? progress.verdict === "pass"
+            ? "Not played as a lesson."
+            : "No attempts yet."
           : `${progress.itemsHit} of ${progress.items} items hit · ${progress.hits} hits, ${progress.misses} misses${progress.lastAt ? ` · last ${when(progress.lastAt)}` : ""}`}
         {progress.pendingSpeak ? ` · ${progress.pendingSpeak} spoken pending` : ""}
       </p>
@@ -619,24 +638,13 @@ function FunctionTile({ grade }: { grade: FunctionGrade }) {
 
 function VerdictTile({ progress }: { progress: ModuleProgress }) {
   const label = progress.verdict === "pass" ? "Pass" : progress.verdict === "fail" ? "Fail" : "Open";
-  const total = progress.hits + progress.misses;
   return (
-    <div className="grade-tile p-3">
+    <div className="grade-tile p-3" data-verdict-by={progress.by}>
       <div className="flex items-center justify-between gap-2">
         <p className="font-black text-white">Module pass / fail</p>
         <span className={sheetBadge(progress.verdict === "pass" ? "passed" : progress.verdict === "fail" ? "failed" : "in-progress")}>{label}</span>
       </div>
-      <p className="mt-1.5 text-xs font-bold text-emerald-50/85">
-        {total === 0 && progress.verdict === "open"
-          ? "No attempts yet. Auto-pass needs 8 cold hits."
-          : progress.verdict !== progress.auto
-            ? `Set by you. Sheet alone says ${progress.auto}. ${progress.coldHits} cold hits.`
-            : progress.verdict === "pass"
-              ? `${progress.coldHits} first-try hits. Passed.`
-              : progress.verdict === "fail"
-                ? `${progress.hits} hits under ${progress.misses} misses after ${total} tries.`
-                : `${progress.coldHits} of 8 cold hits toward auto-pass.`}
-      </p>
+      <p className="mt-1.5 text-xs font-bold text-emerald-50/85">{verdictProvenance(progress)}</p>
     </div>
   );
 }
@@ -668,9 +676,12 @@ function QuickActions({ child, module, progress }: { child: Child; module: Modul
       {act("Done", () => house.applyFromSheet(child.id, module.id, "done"), <CheckIcon size={14} />, "pass")}
       {act("Ease", () => house.applyFromSheet(child.id, module.id, "ease"))}
       {act("Harden", () => house.applyFromSheet(child.id, module.id, "harden"))}
+      {progress.status === "held" ? act("Put back", () => house.setPath(child.id, [...child.path, module.id]), <PlusIcon size={14} />) : null}
       {progress.onPath
         ? act("Hold", () => house.applyFromSheet(child.id, module.id, "hold"))
-        : act("Add to path", () => house.setPath(child.id, [...child.path, module.id]), <PlusIcon size={14} />)}
+        : progress.status !== "held"
+          ? act("Add to path", () => house.setPath(child.id, [...child.path, module.id]), <PlusIcon size={14} />)
+          : null}
       {progress.verdict !== "open" ? act("Reopen", () => house.setVerdict(child.id, module.id, "open")) : null}
     </div>
   );
