@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { InstallHint } from "@/components/Pwa";
 import { HoldToOpen, OfflinePill } from "@/components/ui";
 import {
   phonemeHint,
@@ -975,7 +974,6 @@ export function KidPicker() {
     <main className="kid-stage theme-planets-space px-4 pb-[calc(var(--dock-h)+env(safe-area-inset-bottom,0px)+1rem)] pt-6">
       <OfflinePill />
       <StageHeading eyebrow="Player select" title="Who's reading?" sub="Tap your face." />
-      <InstallHint />
       <div className="mx-auto mt-5 grid max-w-lg grid-cols-1 gap-3">
         {state.kids.map((k, idx) => {
           const waiting = k.status === "waiting";

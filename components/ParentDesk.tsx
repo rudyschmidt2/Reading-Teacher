@@ -1153,6 +1153,9 @@ function VoiceCard() {
         </p>
       ) : null}
       {hearNote ? <p className="mt-3 text-label text-amber-200">{hearNote}</p> : null}
+      <p className="muted mt-3 text-label" data-a2hs-note>
+        On the iPad: Share → Add to Home Screen. That keeps the mic working for “what” and “again.”
+      </p>
     </Card>
   );
 }
