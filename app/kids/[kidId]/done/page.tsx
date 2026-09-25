@@ -56,7 +56,7 @@ function DoneInner() {
   return (
     <main className={`kid-stage theme-${theme.id} flex min-h-dvh flex-col items-center justify-center px-4 py-10 text-center`}>
       <div className="relative">
-        <span className="orb orb-ring party h-36 w-36 text-7xl">
+        <span className="orb orb-ring host-pulse h-36 w-36 text-7xl">
           <span className="emoji-3d">{theme.hostEmoji}</span>
         </span>
         <span className="absolute -right-2 -top-2 grid h-12 w-12 place-items-center rounded-full bg-amber-300 text-amber-900 shadow-[0_4px_0_#b45309]">

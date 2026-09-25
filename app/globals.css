@@ -750,42 +750,7 @@
       0 24px 50px -16px rgb(0 0 0 / 0.6);
   }
 
-  /* Confetti burst pieces: positioned via --x / --y / --c / --d inline vars */
-  .confetti {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: visible;
-  }
-
-  .confetti > span {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 12px;
-    height: 18px;
-    border-radius: 3px;
-    background: var(--c);
-    box-shadow: 0 0 10px var(--c);
-    opacity: 0;
-    animation: confetti 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) var(--d, 0ms) forwards;
-  }
-
-  @keyframes confetti {
-    0% {
-      transform: translate(-50%, -50%) rotate(0deg) scale(0.5);
-      opacity: 1;
-    }
-    70% {
-      opacity: 1;
-    }
-    100% {
-      transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(540deg) scale(1);
-      opacity: 0;
-    }
-  }
-
-  /* Motion: enter once, respond to touch, celebrate a real win. */
+  /* Motion: enter once, respond to touch, celebrate a real win calmly. */
   .bounce-in {
     animation: pop var(--m-slow) var(--ease-pop) both;
   }
@@ -800,6 +765,11 @@
 
   .party {
     animation: party var(--m-slow) ease;
+  }
+
+  /* Done page host: one short pulse (under 400ms), not a burst. */
+  .host-pulse {
+    animation: host-pulse 360ms ease-out;
   }
 
   .host-float {
@@ -875,6 +845,18 @@
     }
   }
 
+  @keyframes host-pulse {
+    0% {
+      transform: scale(0.92);
+    }
+    55% {
+      transform: scale(1.06);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
   @keyframes floaty {
     0%,
     100% {
@@ -938,10 +920,10 @@
   .rise-in,
   .wobble,
   .party,
+  .host-pulse,
   .host-float,
   .glow-pulse,
   .slot--focus,
-  .confetti > span,
   .fat-card,
   .toast,
   .sheet__panel {
@@ -951,9 +933,6 @@
   .rise-in,
   .bounce-in {
     opacity: 1;
-  }
-  .confetti {
-    display: none;
   }
   .hold-fill {
     animation: hold-steps 1.6s steps(2, end) forwards !important;

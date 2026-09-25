@@ -67,36 +67,15 @@ function useToday() {
   return day;
 }
 
-const CONFETTI_COLORS = ["#fde047", "#f472b6", "#22d3ee", "#a3e635", "#fb923c", "#c084fc", "#ffffff"];
-
-function Confetti({ count = 12 }: { count?: number }) {
-  return (
-    <span className="confetti" aria-hidden>
-      {Array.from({ length: count }, (_, k) => {
-        const angle = (k / count) * Math.PI * 2;
-        const dist = 80 + (k % 3) * 36;
-        const style = {
-          "--x": `${Math.cos(angle) * dist}px`,
-          "--y": `${Math.sin(angle) * dist - 24}px`,
-          "--c": CONFETTI_COLORS[k % CONFETTI_COLORS.length],
-          "--d": `${(k % 4) * 40}ms`,
-        } as CSSProperties;
-        return <span key={k} style={style} />;
-      })}
-    </span>
-  );
-}
-
 type Tone = "win" | "quiet" | "miss" | "note";
 type Banner = { text: string; tone: Tone };
 
-/** Win is gold with confetti; a same-card retry is a quiet gold; a miss is white ("not that one"). Never red. */
+/** Win is a soft gold glow with the theme's win line — no confetti; a same-card retry is a quiet gold; a miss is white ("not that one"). Never red. */
 function HonestBanner({ banner }: { banner: Banner }) {
   const cls = banner.tone === "win" ? "party banner--win text-card" : banner.tone === "quiet" ? "banner--quiet text-title" : banner.tone === "note" ? "banner--miss text-title" : "wobble banner--miss text-title";
   return (
     <div role="status" className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-50 mx-auto max-w-lg" data-banner={banner.tone}>
       <div className={`banner relative ${cls}`}>
-        {banner.tone === "win" ? <Confetti /> : null}
         <span className="relative inline-flex items-center justify-center gap-3">
           {banner.tone === "win" ? <SparklesIcon size={26} className="shrink-0" /> : null}
           {banner.text}
@@ -540,7 +519,7 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
       setBanner({ text: skinWin(theme.id, theme.win, seed), tone: "win" });
       house.addStars(child.id, 1);
     } else if (ok) {
-      // A second guess on the same card is morale, not a real win: no star, no confetti.
+      // A second guess on the same card is morale, not a real win: no star, no gold.
       setBanner({ text: "There it is!", tone: "quiet" });
     } else {
       setBanner({ text: skinMiss(theme.id, theme.miss, seed), tone: "miss" });
