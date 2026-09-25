@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isVoiceMuted, setVoiceMuted, speakPhoneme, speakPrompt, voiceLastError, voiceStatus } from "@/lib/audio";
-import { ageFromBirthday, THEMES, wordsUnlocked } from "@/lib/catalog";
+import { ageFromBirthday, THEMES, hasTheme, wordsUnlocked } from "@/lib/catalog";
 import { bandReports, bandsFor, practicePrefill, progressSummary, speedLine, type PracticePrefill } from "@/lib/diagnostic";
 import { allDimensions, moduleProgress, MODULE_STATUS_LABEL, rollupDimension, verdictProvenance, verdictRecord, type DimensionStatus, type ModuleKidStatus } from "@/lib/grades";
 import { planOf } from "@/lib/house";
@@ -334,9 +334,7 @@ function TodayCard({ child }: { child: Child }) {
 
   const tryHref = active ? `/kids/${child.id}/play?mode=try&module=${active.id}` : undefined;
   const pick = () => {
-    const today = new Date();
-    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    if (!child.themeToday || child.themeDate !== day) house.pickTheme(child.id, "planets-space");
+    if (!hasTheme(child)) house.pickTheme(child.id, "planets-space");
   };
 
   return (
@@ -825,9 +823,7 @@ function RowSheet({ child, moduleId, onClose }: { child: Child; moduleId?: strin
   const p = moduleProgress(child, mod, house.state.attempts, verdictRecord(house.state, child.id, moduleId));
   const stretch = planOf(child).moduleStretch[moduleId];
   const pick = () => {
-    const d = new Date();
-    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (!child.themeToday || child.themeDate !== day) house.pickTheme(child.id, "planets-space");
+    if (!hasTheme(child)) house.pickTheme(child.id, "planets-space");
   };
   const act = (label: string, fn: () => void, cls = "opt", icon?: ReactNode) => (
     <button

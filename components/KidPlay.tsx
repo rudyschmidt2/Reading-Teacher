@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HoldToOpen, OfflinePill } from "@/components/ui";
 import {
   phonemeHint,
@@ -15,7 +15,7 @@ import {
   useMicBlocked,
   useTeacherTalking,
 } from "@/lib/audio";
-import { SCOUT_MY1, SCOUT_RH1, THEMES, VOWEL_FACE, themeOf } from "@/lib/catalog";
+import { SCOUT_MY1, SCOUT_RH1, THEMES, VOWEL_FACE, hasTheme, themeOf } from "@/lib/catalog";
 import { elapsedMs, nowMs, todayStamp } from "@/lib/clock";
 import {
   PAUSED_KID_LINE,
@@ -65,6 +65,11 @@ import {
 function useToday() {
   const [day] = useState(todayStamp);
   return day;
+}
+
+/** Where a kid with a skin goes: the first sitting is the skills map, after that it is play. */
+function startPath(child: Child) {
+  return `/kids/${child.id}/${child.diagnosticReport ? "play" : "place"}`;
 }
 
 type Tone = "win" | "quiet" | "miss" | "note";
@@ -362,8 +367,12 @@ function StageHeading({ eyebrow, title, sub }: { eyebrow?: string; title: string
 export function ThemePicker({ kidId }: { kidId: string }) {
   const { kid, pickTheme, ready } = useHouse();
   const router = useRouter();
+  const search = useSearchParams();
   const child = kid(kidId);
-  const themePrompt = ready && child && child.status !== "waiting" ? "Pick today's game." : undefined;
+  // A kid who already has a skin only sees the grid when they asked to change it.
+  const changing = search.get("change") === "1";
+  const skip = Boolean(ready && child && child.status !== "waiting" && hasTheme(child) && !changing);
+  const themePrompt = ready && child && child.status !== "waiting" && !skip ? "Pick today's game." : undefined;
 
   useEffect(() => {
     if (themePrompt) speak(themePrompt);
@@ -372,24 +381,24 @@ export function ThemePicker({ kidId }: { kidId: string }) {
 
   useEffect(() => {
     if (ready && child?.status === "waiting") router.replace(`/kids/${kidId}/waiting`);
-  }, [ready, child, kidId, router]);
+    else if (skip && child) router.replace(startPath(child));
+  }, [ready, child, kidId, router, skip]);
 
   if (!ready) return <Loading />;
   if (!child) return <Loading text="Missing kid." />;
-  if (child.status === "waiting") return null;
+  if (child.status === "waiting" || skip) return null;
 
   const choose = (id: ThemeId) => {
     pickTheme(kidId, id);
     speak(THEMES.find((t) => t.id === id)?.label ?? "Let's play");
     // The first sitting is the skills map. A re-map runs after the daily, from the done page.
-    if (!child.diagnosticReport) router.push(`/kids/${kidId}/place`);
-    else router.push(`/kids/${kidId}/play`);
+    router.push(startPath(child));
   };
 
   return (
     <main className="kid-stage theme-planets-space px-4 py-6">
       <OfflinePill />
-      <StageHeading eyebrow={`${child.name}'s pick`} title="Pick today's game" sub="Tomorrow you can pick a different one." />
+      <StageHeading eyebrow={`${child.name}'s pick`} title="Today's skin" sub="Pick one. You can change later." />
       <div className="mx-auto mt-5 grid max-w-lg grid-cols-2 gap-3 md:max-w-3xl md:grid-cols-4">
         {THEMES.map((t, k) => (
           <button
@@ -550,7 +559,7 @@ export function DiagnosticSession({ kidId }: { kidId: string }) {
     router.replace(`/kids/${kidId}/waiting`);
     return null;
   }
-  if (!child.themeToday || child.themeDate !== day) {
+  if (!hasTheme(child)) {
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
@@ -867,7 +876,7 @@ export function DailySession({ kidId, mode, moduleId }: { kidId: string; mode: M
     router.replace(`/kids/${kidId}/waiting`);
     return null;
   }
-  if (!child.themeToday || child.themeDate !== day) {
+  if (!hasTheme(child)) {
     router.replace(`/kids/${kidId}/theme`);
     return null;
   }
@@ -956,12 +965,13 @@ export function KidPicker() {
       <div className="mx-auto mt-5 grid max-w-lg grid-cols-1 gap-3">
         {state.kids.map((k, idx) => {
           const waiting = k.status === "waiting";
+          const skin = !waiting && hasTheme(k) ? themeOf(k.themeToday) : undefined;
           const [a, b] = KID_GRADIENTS[idx % KID_GRADIENTS.length];
           return (
+            <div key={k.id} className={`rise-in stagger-${Math.min(idx + 1, 4)}`}>
             <Link
-              key={k.id}
-              href={waiting ? `/kids/${k.id}/waiting` : `/kids/${k.id}/theme`}
-              className={`fat-card rise-in stagger-${Math.min(idx + 1, 4)} flex min-h-[6rem] items-center gap-4 p-4 ${waiting ? "opacity-70 saturate-50" : ""}`}
+              href={waiting ? `/kids/${k.id}/waiting` : skin ? startPath(k) : `/kids/${k.id}/theme`}
+              className={`fat-card flex min-h-[6rem] items-center gap-4 p-4 ${waiting ? "opacity-70 saturate-50" : ""}`}
               style={waiting ? ({ "--card": "#ece9f4" } as CSSProperties) : undefined}
               data-kid={k.id}
             >
@@ -984,6 +994,18 @@ export function KidPicker() {
                 </span>
               )}
             </Link>
+            {skin ? (
+              <Link
+                href={`/kids/${k.id}/theme?change=1`}
+                className="mt-1.5 inline-flex min-h-9 items-center gap-1.5 px-2 text-label font-bold text-white/70"
+                aria-label={`Change skin for ${k.name}`}
+                data-change-skin={k.id}
+              >
+                <span aria-hidden>{skin.emoji}</span>
+                Skin: {skin.label} · <span className="underline decoration-white/40 underline-offset-2">Change</span>
+              </Link>
+            ) : null}
+            </div>
           );
         })}
       </div>

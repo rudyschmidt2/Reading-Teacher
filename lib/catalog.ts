@@ -98,6 +98,11 @@ export function themeOf(id?: ThemeId) {
   return THEMES.find((t) => t.id === id) ?? THEMES[2];
 }
 
+/** A kid with a last-used skin skips the picker; the grid is only for the first sitting or an explicit Change. */
+export function hasTheme(child: { themeToday?: ThemeId }): boolean {
+  return Boolean(child.themeToday && THEMES.some((t) => t.id === child.themeToday));
+}
+
 export const VOWEL_FACE: Record<
   Vowel,
   { name: string; color: string; mark: string; sound: string }
