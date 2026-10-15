@@ -1,3 +1,5 @@
+<!-- Verification: prove a UI change with .cursor/skills/verify-reading-teacher/SKILL.md before calling it done. -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
